@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import authRoutes from "./routes/authRoutes.js";
+import contentRoutes from "./routes/contentRoutes.js";
 import videoRoutes from "./routes/videoRoutes.js";
 
 const app = express();
@@ -22,6 +23,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/content", contentRoutes);
 app.use("/api/videos", videoRoutes);
 
 app.use((req, res) => {
