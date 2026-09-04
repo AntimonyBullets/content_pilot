@@ -66,9 +66,11 @@ export const buildFieldRegenerationMessages = ({
   settings,
 }) => {
   const chapterInstruction =
-    contentType === "mainVideo" && field === "description" && settings.createChapters
-      ? "If regenerating the main video description, include suitable YouTube chapter timestamp lines that correspond to meaningful topic transitions."
-      : "Only regenerate the requested field.";
+  contentType === "mainVideo" && field === "description"
+    ? settings.createChapters
+      ? "Include suitable YouTube chapter timestamp lines that correspond to meaningful topic transitions in the timestamped transcript segments."
+      : "Do not include any chapter timestamp lines, timestamps, or chapter sections in the main video description. If the current content contains existing chapters or timestamps, remove them from the regenerated description."
+    : "Only regenerate the requested field.";
 
   const shortInstruction =
     contentType === "short"
