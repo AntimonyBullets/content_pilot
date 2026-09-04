@@ -6,6 +6,7 @@ import {
 
 const MAIN_VIDEO_FIELDS = ["title", "description", "tags"];
 const SHORT_FIELDS = ["title", "description", "hashtags", "startTime", "endTime"];
+const MAX_REGENERATION_MESSAGE_LENGTH = 1000;
 
 const arrayOfStringsSchema = {
   type: "array",
@@ -64,6 +65,30 @@ const normalizeTranscript = (transcript) => {
     text: String(transcript.text).trim(),
     segments,
   };
+};
+
+const normalizeRegenerationMessage = (message) => {
+  if (message === undefined || message === null) {
+    return "";
+  }
+
+  if (typeof message !== "string") {
+    const error = new Error("Regeneration message must be a string");
+    error.code = "INVALID_REGENERATION_MESSAGE";
+    throw error;
+  }
+
+  const normalizedMessage = message.trim();
+
+  if (normalizedMessage.length > MAX_REGENERATION_MESSAGE_LENGTH) {
+    const error = new Error(
+      `Regeneration message cannot exceed ${MAX_REGENERATION_MESSAGE_LENGTH} characters`
+    );
+    error.code = "INVALID_REGENERATION_MESSAGE";
+    throw error;
+  }
+
+  return normalizedMessage;
 };
 
 const requireSegments = (transcript) => {
@@ -261,10 +286,12 @@ export const regenerateContentField = async ({
   contentType,
   field,
   currentContent,
+  message,
   settings,
 }) => {
   const normalizedTranscript = normalizeTranscript(transcript);
   const normalizedSettings = normalizeSettings(settings);
+  const normalizedMessage = normalizeRegenerationMessage(message);
 
   if (!fieldSchemas[contentType]) {
     const error = new Error("Unsupported content type");
@@ -293,6 +320,7 @@ export const regenerateContentField = async ({
       contentType,
       field,
       currentContent,
+      message: normalizedMessage,
       settings: normalizedSettings,
     }),
   });

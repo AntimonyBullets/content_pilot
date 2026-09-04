@@ -15,7 +15,8 @@ const errorResponse = (error) => {
   if (
     error.code === "UNSUPPORTED_LLM_MODEL" ||
     error.code === "UNSUPPORTED_CONTENT_TYPE" ||
-    error.code === "UNSUPPORTED_CONTENT_FIELD"
+    error.code === "UNSUPPORTED_CONTENT_FIELD" ||
+    error.code === "INVALID_REGENERATION_MESSAGE"
   ) {
     return [400, error.message];
   }
@@ -61,6 +62,7 @@ export const regenerateContent = async (req, res) => {
       contentType: req.body?.contentType,
       field: req.body?.field,
       currentContent: req.body?.currentContent,
+      message: req.body?.message,
       settings: req.body?.settings,
     });
 

@@ -62,6 +62,7 @@ export const buildFieldRegenerationMessages = ({
   contentType,
   field,
   currentContent,
+  message,
   settings,
 }) => {
   const chapterInstruction =
@@ -73,6 +74,16 @@ export const buildFieldRegenerationMessages = ({
     contentType === "short"
       ? "For Short fields, stay consistent with the selected short-form segment when currentContent includes startTime and endTime. If regenerating startTime or endTime, choose a timestamp that keeps the Short coherent and useful on its own."
       : "";
+
+  const userRegenerationInstruction = message
+    ? [
+        "USER'S REGENERATION INSTRUCTION:",
+        "The user wants the regenerated field to follow this additional instruction:",
+        message,
+        "",
+        "Follow this instruction while still respecting the transcript as the source of truth. Do not invent facts or claims that are not supported by the transcript.",
+      ].join("\n")
+    : "";
 
   return [
     ["system", baseSystemPrompt],
@@ -86,6 +97,7 @@ export const buildFieldRegenerationMessages = ({
         "",
         "Current content:",
         JSON.stringify(currentContent || {}, null, 2),
+        ...(userRegenerationInstruction ? ["", userRegenerationInstruction] : []),
         "",
         "Transcript text:",
         transcript.text,
