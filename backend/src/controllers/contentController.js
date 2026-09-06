@@ -1,7 +1,14 @@
+import VideoSession from "../models/VideoSession.js";
+import YouTubeConnection from "../models/YouTubeConnection.js";
 import {
   generateContentFromTranscript,
   regenerateContentField,
 } from "../services/contentGenerationService.js";
+import { runAutomationWorkflow } from "../services/youtubePublishingService.js";
+
+// ---------------------------------------------------------------------------
+// Map content generation errors to HTTP status/message pairs
+// ---------------------------------------------------------------------------
 
 const errorResponse = (error) => {
   if (error.code === "MISSING_TRANSCRIPT") {
@@ -36,24 +43,157 @@ const errorResponse = (error) => {
   return [500, "Unable to generate content"];
 };
 
+// ---------------------------------------------------------------------------
+// POST /api/content/generate
+//
+// Generates content from the provided transcript.
+//
+// If `sessionId` is provided:
+//   - Loads and verifies session ownership
+//   - Persists generated content and settings to the session
+//   - If automateEntireProcess=true and YouTube is connected:
+//       → Runs the full automation workflow and returns publishing results
+//
+// If `sessionId` is absent:
+//   - Behaves exactly as before (stateless, backward-compatible)
+// ---------------------------------------------------------------------------
+
 export const generateContent = async (req, res) => {
+  const { transcript, settings, sessionId } = req.body || {};
+
   try {
-    const content = await generateContentFromTranscript({
-      transcript: req.body?.transcript,
-      settings: req.body?.settings,
+    const content = await generateContentFromTranscript({ transcript, settings });
+
+    // --- Stateless path (no sessionId) — preserve existing behavior ---
+    if (!sessionId) {
+      return res.status(200).json({
+        message: "Content generated successfully",
+        content,
+      });
+    }
+
+    // --- Stateful path (sessionId provided) ---
+
+    // Load and verify session ownership
+    const session = await VideoSession.findOne({
+      _id: sessionId,
+      userId: req.user._id,
     });
 
+    if (!session) {
+      return res.status(404).json({ message: "Video session not found" });
+    }
+
+    // Normalize settings (reuse the same normalizeBool logic applied in contentGenerationService)
+    const normalizeBool = (v) => v === true || v === "true" || v === 1 || v === "1";
+
+    const normalizedSettings = {
+      enableShort: normalizeBool(settings?.enableShort),
+      automateEntireProcess: normalizeBool(settings?.automateEntireProcess),
+      createChapters: normalizeBool(settings?.createChapters),
+      addToSuitablePlaylist: normalizeBool(settings?.addToSuitablePlaylist),
+      llmModel: settings?.llmModel || "gemini",
+    };
+
+    // Persist generated content and settings snapshot to the session
+    session.generatedContent = {
+      mainVideo: content.mainVideo,
+      short: content.short || null,
+    };
+    session.settings = normalizedSettings;
+    await session.save();
+
+    // --- Check automation ---
+    if (!normalizedSettings.automateEntireProcess) {
+      // automateEntireProcess=false: stop after generation, no publishing
+      return res.status(200).json({
+        message: "Content generated successfully",
+        content,
+        sessionId,
+      });
+    }
+
+    // automateEntireProcess=true: verify YouTube is connected
+    const ytConnection = await YouTubeConnection.findOne({ userId: req.user._id });
+
+    if (!ytConnection) {
+      // YouTube not connected — return generated content without publishing
+      console.warn(
+        "[Automation] automateEntireProcess=true but YouTube is not connected — skipping auto-publish"
+      );
+      return res.status(200).json({
+        message:
+          "Content generated successfully. Automatic publishing was skipped because YouTube is not connected.",
+        content,
+        sessionId,
+        automationSkipped: true,
+        automationSkipReason: "YouTube not connected",
+      });
+    }
+
+    // Run the full automation workflow inline
+    console.log("[Automation] Running automation workflow for session", sessionId);
+    let automationResult;
+
+    try {
+      automationResult = await runAutomationWorkflow(req.user._id, sessionId);
+    } catch (automationError) {
+      // Automation crashed unexpectedly — content is already saved, return partial result
+      console.error("[Automation] Workflow error:", automationError.message);
+      return res.status(200).json({
+        message: "Content generated successfully, but automation encountered an error.",
+        content,
+        sessionId,
+        automation: {
+          attempted: true,
+          mainVideo: null,
+          short: null,
+          errors: [{ step: "automation", message: automationError.message }],
+        },
+      });
+    }
+
+    const hasErrors = automationResult.errors.length > 0;
+    const message = hasErrors
+      ? "Content generated. Automation completed with some errors."
+      : "Content generated and published automatically.";
+
     return res.status(200).json({
-      message: "Content generated successfully",
+      message,
       content,
+      sessionId,
+      automation: {
+        attempted: true,
+        mainVideo: automationResult.mainVideo,
+        short: automationResult.short,
+        errors: automationResult.errors,
+      },
     });
   } catch (error) {
     const [status, message] = errorResponse(error);
-
     console.error("Content generation error:", error.message);
     return res.status(status).json({ message });
   }
 };
+
+// ---------------------------------------------------------------------------
+// POST /api/content/regenerate
+//
+// Regenerates a specific metadata field.
+//
+// MUST NEVER:
+//   - publish the main video
+//   - publish the Short
+//   - create a Short clip
+//   - upload a thumbnail
+//   - add anything to a playlist
+//   - trigger automateEntireProcess
+//   - call YouTube publishing operations
+//   - regenerate startTime or endTime
+//
+// The settings and sessionId are intentionally ignored for publishing purposes.
+// Regeneration is completely independent of YouTube.
+// ---------------------------------------------------------------------------
 
 export const regenerateContent = async (req, res) => {
   try {
@@ -72,7 +212,6 @@ export const regenerateContent = async (req, res) => {
     });
   } catch (error) {
     const [status, message] = errorResponse(error);
-
     console.error("Content regeneration error:", error.message);
     return res.status(status).json({ message });
   }

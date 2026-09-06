@@ -28,12 +28,17 @@ const fieldSchemas = {
   },
 };
 
+// Normalize a setting value that may arrive as a boolean or a string ("true"/"false").
+// Using Boolean(x) directly would make Boolean("false") === true which is incorrect.
+const normalizeBool = (value) =>
+  value === true || value === "true" || value === 1 || value === "1";
+
 const normalizeSettings = (settings = {}) => ({
-  enableShort: Boolean(settings.enableShort),
-  automateEntireProcess: Boolean(settings.automateEntireProcess),
-  createChapters: Boolean(settings.createChapters),
+  enableShort: normalizeBool(settings.enableShort),
+  automateEntireProcess: normalizeBool(settings.automateEntireProcess),
+  createChapters: normalizeBool(settings.createChapters),
   llmModel: settings.llmModel || "gemini",
-  addToSuitablePlaylist: Boolean(settings.addToSuitablePlaylist),
+  addToSuitablePlaylist: normalizeBool(settings.addToSuitablePlaylist),
 });
 
 const isValidSegment = (segment) =>

@@ -76,3 +76,57 @@ export const handleVideoUpload = (req, res, next) => {
     return res.status(400).json({ message: "Unable to upload video" });
   });
 };
+
+// ---------------------------------------------------------------------------
+// Thumbnail upload (JPEG / PNG, max 2 MB)
+// ---------------------------------------------------------------------------
+
+const THUMBNAIL_MAX_MB = 2;
+
+const allowedThumbnailMimeTypes = new Set(["image/jpeg", "image/png", "image/jpg"]);
+const allowedThumbnailExtensions = new Set([".jpg", ".jpeg", ".png"]);
+
+const thumbnailFileFilter = (req, file, cb) => {
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  const hasAllowedExtension = allowedThumbnailExtensions.has(extension);
+  const hasAllowedMimeType = allowedThumbnailMimeTypes.has(file.mimetype);
+
+  if (!hasAllowedExtension || !hasAllowedMimeType) {
+    const error = new Error("Invalid thumbnail type. Supported formats: jpg, jpeg, png.");
+    error.code = "INVALID_THUMBNAIL_TYPE";
+    return cb(error);
+  }
+
+  return cb(null, true);
+};
+
+const uploadThumbnail = multer({
+  storage,
+  fileFilter: thumbnailFileFilter,
+  limits: {
+    fileSize: THUMBNAIL_MAX_MB * 1024 * 1024,
+    files: 1,
+  },
+}).single("thumbnail");
+
+export const handleThumbnailUpload = (req, res, next) => {
+  uploadThumbnail(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        message: `Thumbnail is too large. Maximum size is ${THUMBNAIL_MAX_MB} MB.`,
+      });
+    }
+
+    if (error.code === "INVALID_THUMBNAIL_TYPE") {
+      return res.status(400).json({ message: error.message });
+    }
+
+    console.error("Thumbnail upload error:", error.message);
+    return res.status(400).json({ message: "Unable to upload thumbnail" });
+  });
+};
+
