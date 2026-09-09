@@ -104,6 +104,13 @@ const videoSessionSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Records when the physical source video file was successfully deleted.
+    // Kept as historical reference; originalVideoPath is retained regardless.
+    sourceVideoCleanedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Playlist that the main video was added to (if any)
     assignedPlaylistId: {
       type: String,

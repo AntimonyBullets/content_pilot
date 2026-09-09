@@ -9,6 +9,7 @@ import {
   publishMainVideo,
   publishShort,
   saveThumbnail,
+  getUserPlaylistsHandler,
 } from "../controllers/youtubeController.js";
 
 const router = express.Router();
@@ -20,6 +21,9 @@ router.get("/oauth/callback", oauthCallback); // auth via OAuth state, not JWT
 // Connection management
 router.get("/status", protect, getYouTubeStatus);
 router.post("/disconnect", protect, disconnectYouTube);
+
+// Playlists
+router.get("/playlists", protect, getUserPlaylistsHandler);
 
 // Publishing
 router.post("/publish/main", protect, publishMainVideo);

@@ -149,7 +149,7 @@ export const uploadVideo = async (userId, filePath, { title, description, tags, 
         categoryId,
       },
       status: {
-        privacyStatus: "public",
+        privacyStatus: "unlisted",
         selfDeclaredMadeForKids: false,
       },
     },

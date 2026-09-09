@@ -263,6 +263,12 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
   // Optional: playlist assignment (non-fatal)
   await attemptPlaylistAssignment(userId, session, youtubeVideoId);
 
+  // Source video lifecycle: if no Short is needed, the source is done being used.
+  // Thumbnail/playlist failures must not block this cleanup.
+  if (!session.settings?.enableShort) {
+    await cleanupSourceVideo(session);
+  }
+
   return {
     youtubeVideoId,
     title,
@@ -383,6 +389,9 @@ export const publishShort = async (userId, sessionId) => {
   // Step 4: Clean up temp Short clip (always, after successful upload)
   await cleanupShortFile(shortClipPath);
 
+  // Source video lifecycle: Short is published, source video is no longer needed.
+  await cleanupSourceVideo(session);
+
   return {
     youtubeVideoId,
     title: shortData.title,
@@ -451,6 +460,12 @@ export const cleanupSourceVideo = async (session) => {
   if (!session.originalVideoPath) return;
 
   await fs.promises.rm(session.originalVideoPath, { force: true }).catch((error) => {
-    console.warn("[Cleanup] Source video cleanup failed:", error.message);
+    if (error.code !== "ENOENT") {
+      console.warn("[Cleanup] Source video cleanup failed:", error.message);
+    }
   });
+
+  // Record cleanup time, regardless of whether the file was already missing.
+  session.sourceVideoCleanedAt = new Date();
+  await session.save();
 };

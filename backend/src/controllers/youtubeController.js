@@ -6,6 +6,7 @@ import {
   generateAuthUrl,
   exchangeCodeForTokens,
   getChannelInfo,
+  getUserPlaylists,
 } from "../services/youtubeService.js";
 import {
   publishMainVideo as publishMainVideoService,
@@ -151,6 +152,22 @@ export const getYouTubeStatus = async (req, res) => {
   } catch (error) {
     console.error("[YouTube] Status error:", error.message);
     return res.status(500).json({ message: "Unable to fetch YouTube connection status" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /api/youtube/playlists
+// Requires ContentPilot authentication.
+// Returns the currently connected YouTube account's playlists.
+// ---------------------------------------------------------------------------
+
+export const getUserPlaylistsHandler = async (req, res) => {
+  try {
+    const playlists = await getUserPlaylists(req.user._id);
+
+    return res.status(200).json({ playlists });
+  } catch (error) {
+    return handlePublishError(error, res, "playlists");
   }
 };
 
