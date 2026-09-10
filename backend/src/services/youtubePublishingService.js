@@ -4,7 +4,6 @@ import YouTubeConnection from "../models/YouTubeConnection.js";
 import {
   uploadVideo,
   setThumbnail,
-  getUserPlaylists,
   addVideoToPlaylist,
 } from "./youtubeService.js";
 import { createShortClip, cleanupShortFile } from "./shortGenerationService.js";
@@ -62,11 +61,12 @@ const checkSourceVideoAccessible = async (session) => {
 // Playlist selection via LLM
 //
 // Provides real playlist data to the LLM and validates the selection against
-// actual playlist IDs. Returns null if selection is invalid or unavailable.
+// actual playlist IDs. Returns the full selected playlist object, or null if
+// selection is invalid or unavailable. Used during content generation.
 // ---------------------------------------------------------------------------
 
-const selectPlaylistWithLLM = async (playlists, videoMetadata, llmModel) => {
-  if (!playlists.length) {
+export const selectPlaylistForVideo = async ({ playlists, videoMetadata, llmModel }) => {
+  if (!playlists || !playlists.length) {
     console.log("[Playlist] No playlists available — skipping assignment");
     return null;
   }
@@ -141,11 +141,12 @@ const selectPlaylistWithLLM = async (playlists, videoMetadata, llmModel) => {
   }
 
   console.log(`[Playlist] LLM selected playlist: "${validPlaylist.title}" (${validPlaylist.id})`);
-  return validPlaylist.id;
+  return validPlaylist;
 };
 
 // ---------------------------------------------------------------------------
 // Attempt optional playlist assignment after main video upload.
+// Uses the playlist selected during generation (session.selectedPlaylistId).
 // Failures here are non-fatal — the main video stays published.
 // ---------------------------------------------------------------------------
 
@@ -154,23 +155,7 @@ const attemptPlaylistAssignment = async (userId, session, youtubeVideoId) => {
     return;
   }
 
-  let playlists;
-
-  try {
-    playlists = await getUserPlaylists(userId);
-  } catch (playlistError) {
-    console.warn("[Playlist] Failed to retrieve playlists:", playlistError.message);
-    return;
-  }
-
-  const selectedPlaylistId = await selectPlaylistWithLLM(
-    playlists,
-    {
-      title: session.generatedContent.mainVideo.title,
-      description: session.generatedContent.mainVideo.description,
-    },
-    session.settings.llmModel
-  );
+  const selectedPlaylistId = session.selectedPlaylistId;
 
   if (!selectedPlaylistId) {
     return;
@@ -263,11 +248,8 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
   // Optional: playlist assignment (non-fatal)
   await attemptPlaylistAssignment(userId, session, youtubeVideoId);
 
-  // Source video lifecycle: if no Short is needed, the source is done being used.
-  // Thumbnail/playlist failures must not block this cleanup.
-  if (!session.settings?.enableShort) {
-    await cleanupSourceVideo(session);
-  }
+  // Source video lifecycle (central decision — publishing order does not matter)
+  await shouldCleanupSourceVideo(session);
 
   return {
     youtubeVideoId,
@@ -389,8 +371,8 @@ export const publishShort = async (userId, sessionId) => {
   // Step 4: Clean up temp Short clip (always, after successful upload)
   await cleanupShortFile(shortClipPath);
 
-  // Source video lifecycle: Short is published, source video is no longer needed.
-  await cleanupSourceVideo(session);
+  // Source video lifecycle (central decision — safe even if Short is published first)
+  await shouldCleanupSourceVideo(session);
 
   return {
     youtubeVideoId,
@@ -468,4 +450,30 @@ export const cleanupSourceVideo = async (session) => {
   // Record cleanup time, regardless of whether the file was already missing.
   session.sourceVideoCleanedAt = new Date();
   await session.save();
+};
+
+// ---------------------------------------------------------------------------
+// Central source-video cleanup decision.
+// The source may be deleted only when the main video is published AND either
+// Shorts are disabled OR the Short has also been published. Publishing order
+// does not matter.
+// ---------------------------------------------------------------------------
+
+export const shouldCleanupSourceVideo = async (session) => {
+  if (session.sourceVideoCleanedAt) {
+    return;
+  }
+
+  if (session.mainVideo.status !== "published") {
+    return;
+  }
+
+  const shortEnabled = session.settings?.enableShort === true;
+  const shortDone = shortEnabled === false || session.short.status === "published";
+
+  if (!shortDone) {
+    return;
+  }
+
+  await cleanupSourceVideo(session);
 };

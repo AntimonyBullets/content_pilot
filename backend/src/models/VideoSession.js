@@ -111,6 +111,13 @@ const videoSessionSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Playlist selected for the Main video during content generation (pre-publish).
+    // The actual assignment after publishing is tracked separately in assignedPlaylistId.
+    selectedPlaylistId: {
+      type: String,
+      default: null,
+    },
+
     // Playlist that the main video was added to (if any)
     assignedPlaylistId: {
       type: String,

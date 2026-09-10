@@ -4,7 +4,11 @@ import {
   generateContentFromTranscript,
   regenerateContentField,
 } from "../services/contentGenerationService.js";
-import { runAutomationWorkflow } from "../services/youtubePublishingService.js";
+import {
+  runAutomationWorkflow,
+  selectPlaylistForVideo,
+} from "../services/youtubePublishingService.js";
+import { getUserPlaylists } from "../services/youtubeService.js";
 
 // ---------------------------------------------------------------------------
 // Map content generation errors to HTTP status/message pairs
@@ -41,6 +45,56 @@ const errorResponse = (error) => {
   }
 
   return [500, "Unable to generate content"];
+};
+
+// ---------------------------------------------------------------------------
+// Playlist selection during generation.
+// Returns the selected playlist object or null. Never throws — playlist
+// selection must not prevent content generation from succeeding.
+// ---------------------------------------------------------------------------
+
+const selectPlaylistDuringGenerate = async (userId, session) => {
+  if (!session.settings?.addToSuitablePlaylist) {
+    return null;
+  }
+
+  const connection = await YouTubeConnection.findOne({ userId });
+
+  if (!connection) {
+    console.warn("[Playlist] YouTube not connected — skipping playlist selection during generate");
+    return null;
+  }
+
+  let playlists;
+
+  try {
+    playlists = await getUserPlaylists(userId);
+  } catch (error) {
+    console.warn("[Playlist] Failed to retrieve playlists during generate:", error.message);
+    return null;
+  }
+
+  const selected = await selectPlaylistForVideo({
+    playlists,
+    videoMetadata: {
+      title: session.generatedContent.mainVideo.title,
+      description: session.generatedContent.mainVideo.description,
+    },
+    llmModel: session.settings.llmModel,
+  });
+
+  if (!selected) {
+    return null;
+  }
+
+  session.selectedPlaylistId = selected.id;
+  await session.save();
+
+  return {
+    id: selected.id,
+    title: selected.title,
+    description: selected.description,
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -103,6 +157,9 @@ export const generateContent = async (req, res) => {
     session.settings = normalizedSettings;
     await session.save();
 
+    // Playlist selection happens during generate (Main video only)
+    const playlist = await selectPlaylistDuringGenerate(req.user._id, session);
+
     // --- Check automation ---
     if (!normalizedSettings.automateEntireProcess) {
       // automateEntireProcess=false: stop after generation, no publishing
@@ -110,6 +167,7 @@ export const generateContent = async (req, res) => {
         message: "Content generated successfully",
         content,
         sessionId,
+        playlist,
       });
     }
 
@@ -126,6 +184,7 @@ export const generateContent = async (req, res) => {
           "Content generated successfully. Automatic publishing was skipped because YouTube is not connected.",
         content,
         sessionId,
+        playlist,
         automationSkipped: true,
         automationSkipReason: "YouTube not connected",
       });
@@ -144,6 +203,7 @@ export const generateContent = async (req, res) => {
         message: "Content generated successfully, but automation encountered an error.",
         content,
         sessionId,
+        playlist,
         automation: {
           attempted: true,
           mainVideo: null,
@@ -162,6 +222,7 @@ export const generateContent = async (req, res) => {
       message,
       content,
       sessionId,
+      playlist,
       automation: {
         attempted: true,
         mainVideo: automationResult.mainVideo,
@@ -191,20 +252,57 @@ export const generateContent = async (req, res) => {
 //   - call YouTube publishing operations
 //   - regenerate startTime or endTime
 //
-// The settings and sessionId are intentionally ignored for publishing purposes.
-// Regeneration is completely independent of YouTube.
+// Regeneration is session-aware: transcript, current content, and settings are
+// read from the authoritative VideoSession (not from the client). The updated
+// field is persisted back into session.generatedContent.
 // ---------------------------------------------------------------------------
 
 export const regenerateContent = async (req, res) => {
+  const { sessionId, contentType, field } = req.body || {};
+
   try {
-    const regeneratedField = await regenerateContentField({
-      transcript: req.body?.transcript,
-      contentType: req.body?.contentType,
-      field: req.body?.field,
-      currentContent: req.body?.currentContent,
-      message: req.body?.message,
-      settings: req.body?.settings,
+    // Regeneration is session-aware: server-side session is authoritative.
+    if (!sessionId) {
+      return res.status(400).json({ message: "sessionId is required" });
+    }
+
+    // Short timestamps are fixed at generation time and must never be regenerated.
+    if (field === "startTime" || field === "endTime") {
+      const error = new Error("Short startTime/endTime cannot be regenerated");
+      error.code = "UNSUPPORTED_CONTENT_FIELD";
+      throw error;
+    }
+
+    // Load and verify session ownership
+    const session = await VideoSession.findOne({
+      _id: sessionId,
+      userId: req.user._id,
     });
+
+    if (!session) {
+      return res.status(404).json({ message: "Video session not found" });
+    }
+
+    if (!session.generatedContent?.[contentType]) {
+      const error = new Error("Unsupported content type");
+      error.code = "UNSUPPORTED_CONTENT_TYPE";
+      throw error;
+    }
+
+    const regeneratedField = await regenerateContentField({
+      transcript: session.transcript,
+      contentType,
+      field,
+      currentContent: session.generatedContent[contentType],
+      message: req.body?.message,
+      settings: session.settings,
+    });
+
+    // Persist the regenerated field back into the session so it becomes the
+    // source of truth for future publishing.
+    session.generatedContent[contentType][regeneratedField.field] =
+      regeneratedField.value;
+    await session.save();
 
     return res.status(200).json({
       message: "Content field regenerated successfully",
