@@ -1,6 +1,7 @@
 import fs from "fs";
 import VideoSession from "../models/VideoSession.js";
 import { transcribeVideo } from "../services/transcriptionService.js";
+import { downloadVideo } from "../services/videoDownloadService.js";
 
 // ---------------------------------------------------------------------------
 // Cleanup helper — removes the file only on failure paths.
@@ -58,12 +59,30 @@ const errorResponse = (error) => {
 // ---------------------------------------------------------------------------
 
 export const transcribeUploadedVideo = async (req, res) => {
-  const videoPath = req.file?.path;
-  const originalFilename = req.file?.originalname || null;
+  let videoPath = req.file?.path;
+  let originalFilename = req.file?.originalname || null;
 
-  // Validate upload before doing any work
+  if (!req.file && !req.body?.videoUrl) {
+    return res.status(400).json({ message: "Video file or videoUrl is required" });
+  }
+
+  if (req.file && req.body?.videoUrl) {
+    return res.status(400).json({ message: "Provide either a video file or videoUrl, not both" });
+  }
+
   if (!req.file) {
-    return res.status(400).json({ message: "Video file is required" });
+    try {
+      ({ filePath: videoPath, originalFilename } = await downloadVideo(req.body.videoUrl));
+    } catch (error) {
+      const status =
+        error.code === "VIDEO_TOO_LARGE" ? 413 :
+        ["INVALID_VIDEO_URL", "UNSUPPORTED_VIDEO_RESPONSE"].includes(error.code) ? 400 : 502;
+      console.error("Video download error:", error.message);
+      const message =
+        status === 413 ? "Downloaded video is too large" :
+        status === 400 ? error.message : "Unable to download video from URL";
+      return res.status(status).json({ message });
+    }
   }
 
   let transcript;

@@ -57,6 +57,10 @@ export const uploadVideo = multer({
 }).single("video");
 
 export const handleVideoUpload = (req, res, next) => {
+  if (!req.is("multipart/form-data")) {
+    return next();
+  }
+
   uploadVideo(req, res, (error) => {
     if (!error) {
       return next();
@@ -129,4 +133,3 @@ export const handleThumbnailUpload = (req, res, next) => {
     return res.status(400).json({ message: "Unable to upload thumbnail" });
   });
 };
-

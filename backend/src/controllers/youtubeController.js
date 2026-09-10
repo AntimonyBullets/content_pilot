@@ -7,6 +7,7 @@ import {
   exchangeCodeForTokens,
   getChannelInfo,
   getUserPlaylists,
+  revokeYouTubeAuthorization,
 } from "../services/youtubeService.js";
 import {
   publishMainVideo as publishMainVideoService,
@@ -179,7 +180,12 @@ export const getUserPlaylistsHandler = async (req, res) => {
 
 export const disconnectYouTube = async (req, res) => {
   try {
-    await YouTubeConnection.findOneAndDelete({ userId: req.user._id });
+    const connection = await YouTubeConnection.findOne({ userId: req.user._id });
+
+    if (connection) {
+      await revokeYouTubeAuthorization(connection);
+      await YouTubeConnection.deleteOne({ _id: connection._id });
+    }
 
     return res.status(200).json({ message: "YouTube disconnected successfully" });
   } catch (error) {

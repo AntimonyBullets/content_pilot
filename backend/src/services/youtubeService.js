@@ -48,6 +48,26 @@ export const exchangeCodeForTokens = async (code) => {
   return tokens;
 };
 
+export const revokeYouTubeAuthorization = async (connection) => {
+  const oauth2Client = getOAuth2Client();
+  const token = connection.refreshToken || connection.accessToken;
+
+  if (!token) {
+    return;
+  }
+
+  try {
+    await oauth2Client.revokeToken(token);
+  } catch (error) {
+    const status = error.response?.status || error.code;
+    const providerError = error.response?.data?.error;
+    if (status === 400 && ["invalid_grant", "invalid_token"].includes(providerError)) {
+      return;
+    }
+    throw error;
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Retrieve channel information using a freshly-authorized client
 // ---------------------------------------------------------------------------
