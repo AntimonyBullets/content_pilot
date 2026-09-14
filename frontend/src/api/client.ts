@@ -27,6 +27,23 @@ export interface YouTubeStatusResponse {
   channel: YouTubeChannel | null;
 }
 
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface Transcript {
+  text: string;
+  segments: TranscriptSegment[];
+}
+
+export interface TranscriptionResponse {
+  message: string;
+  transcript: Transcript;
+  sessionId: string;
+}
+
 // Authentication API calls
 export const registerUser = async (name: string, email: string, password: string) => {
   const response = await api.post<{ message: string; user: User }>("/api/auth/register", {
@@ -68,4 +85,31 @@ export const disconnectYouTube = async () => {
 
 export const getYouTubeConnectUrl = () => {
   return `${API_BASE_URL}/api/youtube/connect`;
+};
+
+export const transcribeVideo = async (video: File) => {
+  const formData = new FormData();
+  formData.append("video", video);
+  const response = await api.post<TranscriptionResponse>("/api/videos/transcribe", formData);
+  return response.data;
+};
+
+export const transcribeVideoUrl = async (videoUrl: string) => {
+  const response = await api.post<TranscriptionResponse>("/api/videos/transcribe", { videoUrl });
+  return response.data;
+};
+
+export const generateContent = async (sessionId: string, transcript: Transcript) => {
+  const response = await api.post<{ message: string; sessionId: string }>("/api/content/generate", {
+    sessionId,
+    transcript,
+    settings: {
+      enableShort: false,
+      automateEntireProcess: false,
+      createChapters: false,
+      addToSuitablePlaylist: false,
+      llmModel: "gemini",
+    },
+  });
+  return response.data;
 };

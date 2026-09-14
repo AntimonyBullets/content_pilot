@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { User, YouTubeStatusResponse } from "../api/client";
 import {
   getCurrentUser,
@@ -26,6 +26,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Reads an error message off an axios-style response payload.
+const getResponseMessage = (error: unknown, fallback: string): string => {
+  const responseError = error as { response?: { data?: { message?: string } } };
+  return responseError.response?.data?.message || fallback;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,36 +41,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [youtubeLoading, setYoutubeLoading] = useState<boolean>(false);
   const [youtubeNotice, setYoutubeNotice] = useState<string | null>(null);
 
-  const fetchYouTubeStatus = async () => {
+  const fetchYouTubeStatus = useCallback(async () => {
     setYoutubeLoading(true);
     try {
       const data = await getYouTubeStatus();
       setYoutubeStatus(data);
-    } catch (err: any) {
-      console.error("Failed to fetch YouTube status:", err);
+    } catch (error: unknown) {
+      console.error("Failed to fetch YouTube status:", error);
       setYoutubeStatus({ connected: false, channel: null });
     } finally {
       setYoutubeLoading(false);
     }
-  };
+  }, []);
 
-  const checkSession = async () => {
+  const checkSession = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getCurrentUser();
       setUser(data.user);
       await fetchYouTubeStatus();
-    } catch (err: any) {
+    } catch {
       setUser(null);
       setYoutubeStatus(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchYouTubeStatus]);
 
   useEffect(() => {
-    checkSession();
+    void checkSession();
 
     // Check for YouTube OAuth redirect parameters in URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -79,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setYoutubeNotice(`YouTube connection failed: ${reason || "Access denied or unknown error"}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+  }, [checkSession]);
 
   const login = async (email: string, password: string) => {
     setError(null);
@@ -87,10 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await loginUser(email, password);
       setUser(data.user);
       await fetchYouTubeStatus();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || "Login failed. Please check your credentials.";
+    } catch (error: unknown) {
+      const msg = getResponseMessage(error, "Login failed. Please check your credentials.");
       setError(msg);
-      throw new Error(msg);
+      const thrown = new Error(msg);
+      thrown.cause = error;
+      throw thrown;
     }
   };
 
@@ -100,8 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await registerUser(name, email, password);
       setUser(data.user);
       await fetchYouTubeStatus();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || "Registration failed. Please try again.";
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Registration failed. Please try again.";
       setError(msg);
       throw new Error(msg);
     }
@@ -110,8 +118,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       await logoutUser();
-    } catch (err: any) {
-      console.error("Logout error:", err);
+    } catch (error: unknown) {
+      console.error("Logout error:", error);
     } finally {
       setUser(null);
       setYoutubeStatus(null);
@@ -125,8 +133,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await apiDisconnectYouTube();
       setYoutubeStatus({ connected: false, channel: null });
       setYoutubeNotice("YouTube disconnected successfully.");
-    } catch (err: any) {
-      const msg = err.response?.data?.message || "Failed to disconnect YouTube.";
+    } catch (error: any) {
+      const msg = error.response?.data?.message || "Failed to disconnect YouTube.";
       setError(msg);
     } finally {
       setYoutubeLoading(false);
