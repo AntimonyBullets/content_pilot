@@ -60,7 +60,7 @@ body {
 }
 
 .homepage-content {
-  width: min(100%, 566px);
+  width: min(100%, 900px);
   margin-top: 71px;
 }
 
@@ -226,9 +226,15 @@ body {
   resize: vertical;
 }
 
+.content-field textarea {
+  min-height: 40px;
+  overflow-y: hidden;
+}
+
 .field-regenerate {
   flex-shrink: 0;
   width: auto;
+  height: 40px;
   margin: 0;
   padding: 9px 10px;
   font-size: 0.78rem;
@@ -257,14 +263,14 @@ body {
 }
 
 .homepage-message {
-  width: min(100%, 566px);
+  width: min(100%, 900px);
   margin: 16px auto;
 }
 
 .homepage-footer {
-  position: absolute;
-  bottom: 25px;
-  left: 30px;
+  width: min(100%, 900px);
+  margin-top: auto;
+  padding-top: 32px;
   color: #777777;
   font-size: 0.75rem;
 }
@@ -832,9 +838,8 @@ button.danger:hover {
   }
 
   .homepage-footer {
-    left: 16px;
-    right: 16px;
-    bottom: 18px;
+    width: 100%;
+    padding-top: 28px;
   }
 
   .settings-button {

@@ -32,8 +32,15 @@ const errorResponse = (error) => {
     return [400, error.message];
   }
 
-  if (error.code === "MISSING_GEMINI_API_KEY" || error.code === "MISSING_GEMINI_MODEL") {
+  if (
+    error.code === "MISSING_GEMINI_API_KEY" ||
+    error.code === "MISSING_GEMINI_MODEL"
+  ) {
     return [500, "Gemini is not configured"];
+  }
+
+  if (error.code === "MISSING_GROQ_API_KEY") {
+    return [500, "Groq is not configured"];
   }
 
   if (error.code === "INVALID_LLM_RESPONSE") {
@@ -41,7 +48,7 @@ const errorResponse = (error) => {
   }
 
   if (error.code === "LLM_PROVIDER_ERROR") {
-    return [502, "Gemini content generation failed"];
+    return [502, "LLM content generation failed"];
   }
 
   return [500, "Unable to generate content"];
@@ -146,7 +153,7 @@ export const generateContent = async (req, res) => {
       automateEntireProcess: normalizeBool(settings?.automateEntireProcess),
       createChapters: normalizeBool(settings?.createChapters),
       addToSuitablePlaylist: normalizeBool(settings?.addToSuitablePlaylist),
-      llmModel: settings?.llmModel || "gemini",
+      llmModel: settings?.llmModel || "gemini-3.6-flash",
     };
 
     // Persist generated content and settings snapshot to the session

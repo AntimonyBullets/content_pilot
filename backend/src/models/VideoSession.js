@@ -84,7 +84,7 @@ const videoSessionSchema = new mongoose.Schema(
       automateEntireProcess: { type: Boolean, default: false },
       createChapters: { type: Boolean, default: false },
       addToSuitablePlaylist: { type: Boolean, default: false },
-      llmModel: { type: String, default: "gemini" },
+      llmModel: { type: String, default: "gemini-3.6-flash" },
       _id: false,
     },
 

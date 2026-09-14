@@ -50,7 +50,7 @@ export const Authenticated: React.FC = () => {
     automateEntireProcess: false,
     createChapters: false,
     addToSuitablePlaylist: false,
-    llmModel: "gemini",
+    llmModel: "gemini-3.6-flash",
   });
   const isConnected = youtubeStatus?.connected ?? false;
 
@@ -347,6 +347,7 @@ export const Authenticated: React.FC = () => {
             <EditableContentField
               label="Tags"
               value={generatedContent.mainVideo.tags.join(", ")}
+              multiline
               onChange={(value) =>
                 setGeneratedContent((current) =>
                   current
@@ -537,7 +538,8 @@ export const Authenticated: React.FC = () => {
                           }))
                         }
                       >
-                        <option value="gemini">Gemini</option>
+                        <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                        <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
                       </select>
                     </label>
                     <label className="setting-row">
@@ -632,19 +634,36 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({
   value,
   multiline = false,
   onChange,
-}) => (
-  <label className="content-field">
-    <span>{label}</span>
-    <div className="content-field-input">
-      {multiline ? (
-        <textarea value={value} onChange={(event) => onChange(event.target.value)} rows={4} />
-      ) : (
-        <input value={value} onChange={(event) => onChange(event.target.value)} />
-      )}
-      <button type="button" className="field-regenerate">Regenerate</button>
-    </div>
-  </label>
-);
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !multiline) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value, multiline]);
+
+  return (
+    <label className="content-field">
+      <span>{label}</span>
+      <div className="content-field-input">
+        {multiline ? (
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            rows={1}
+          />
+        ) : (
+          <input value={value} onChange={(event) => onChange(event.target.value)} />
+        )}
+        <button type="button" className="field-regenerate">Regenerate</button>
+      </div>
+    </label>
+  );
+};
 
 const YouTubeIcon: React.FC = () => (
   <svg className="action-icon youtube-icon" viewBox="0 0 24 24" aria-hidden="true">
