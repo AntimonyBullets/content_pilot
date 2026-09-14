@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   generateContent,
+  getShortPreview,
+  getYouTubePlaylists,
   transcribeVideo,
   transcribeVideoUrl,
 } from "../api/client";
-import type { ContentSettings } from "../api/client";
+import type { ContentSettings, GeneratedContent, YouTubePlaylist } from "../api/client";
 import { getYouTubeConnectUrl } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
@@ -31,6 +33,13 @@ export const Authenticated: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState("");
   const [transcribing, setTranscribing] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [hasGeneratedContent, setHasGeneratedContent] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
+  const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null);
+  const [shortPreviewUrl, setShortPreviewUrl] = useState<string | null>(null);
+  const [playlists, setPlaylists] = useState<YouTubePlaylist[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
+  const [recommendedPlaylistId, setRecommendedPlaylistId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +61,49 @@ export const Authenticated: React.FC = () => {
     return () => window.clearTimeout(timeoutId);
   }, [youtubeNotice, clearNotice]);
 
+  useEffect(() => {
+    return () => {
+      if (sourceVideoUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(sourceVideoUrl);
+      }
+    };
+  }, [sourceVideoUrl]);
+
+  useEffect(() => {
+    if (!sessionId || !generatedContent?.short || !contentSettings.enableShort) {
+      setShortPreviewUrl(null);
+      return;
+    }
+
+    let previewUrl: string | null = null;
+    let cancelled = false;
+
+    void getShortPreview(sessionId)
+      .then((blob) => {
+        if (cancelled) return;
+        previewUrl = URL.createObjectURL(blob);
+        setShortPreviewUrl(previewUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setShortPreviewUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [
+    sessionId,
+    generatedContent?.short?.startTime,
+    generatedContent?.short?.endTime,
+    contentSettings.enableShort,
+  ]);
+
+  useEffect(() => {
+    if (!contentSettings.addToSuitablePlaylist || !sessionId) return;
+    void loadPlaylists();
+  }, [contentSettings.addToSuitablePlaylist, sessionId]);
+
   const getErrorMessage = (requestError: unknown, fallback: string) => {
     if (axios.isAxiosError<{ message?: string }>(requestError)) {
       return requestError.response?.data?.message || fallback;
@@ -64,6 +116,10 @@ export const Authenticated: React.FC = () => {
     setMessage(null);
     setSessionId(null);
     transcriptRef.current = null;
+    setGeneratedContent(null);
+    setHasGeneratedContent(false);
+    setSelectedPlaylistId("");
+    setRecommendedPlaylistId(null);
     setTranscribing(true);
 
     try {
@@ -82,6 +138,10 @@ export const Authenticated: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setSourceVideoUrl((current) => {
+        if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+        return URL.createObjectURL(file);
+      });
       void startTranscription(() => transcribeVideo(file));
     }
     event.target.value = "";
@@ -95,6 +155,7 @@ export const Authenticated: React.FC = () => {
       return;
     }
     setShowUrlInput(false);
+    setSourceVideoUrl(trimmedUrl);
     void startTranscription(() => transcribeVideoUrl(trimmedUrl));
   };
 
@@ -105,7 +166,12 @@ export const Authenticated: React.FC = () => {
     setMessage(null);
     setGenerating(true);
     try {
-      await generateContent(sessionId, transcriptRef.current, contentSettings);
+      const response = await generateContent(sessionId, transcriptRef.current, contentSettings);
+      setGeneratedContent(response.content);
+      setHasGeneratedContent(true);
+      const recommendedId = response.playlist?.id || null;
+      setRecommendedPlaylistId(recommendedId);
+      setSelectedPlaylistId(recommendedId || "");
       setMessage("Content generated successfully.");
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to generate content. Please try again."));
@@ -113,6 +179,15 @@ export const Authenticated: React.FC = () => {
       setGenerating(false);
     }
   };
+
+  async function loadPlaylists() {
+    try {
+      const response = await getYouTubePlaylists();
+      setPlaylists(response.playlists);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Unable to load playlists."));
+    }
+  }
 
   return (
     <main className="homepage">
@@ -225,6 +300,13 @@ export const Authenticated: React.FC = () => {
           <div className="alert-success homepage-message">{message}</div>
         )}
 
+        {sessionId && !transcribing && sourceVideoUrl && (
+          <section className="video-preview-section" aria-label="Source video preview">
+            <h2>Source Video</h2>
+            <video className="video-preview" src={sourceVideoUrl} controls preload="metadata" />
+          </section>
+        )}
+
         {sessionId && !transcribing && (
           <button
             type="button"
@@ -232,8 +314,132 @@ export const Authenticated: React.FC = () => {
             onClick={() => void handleGenerateContent()}
             disabled={generating}
           >
-            {generating ? "Generating Content..." : "Generate Content"}
+            {generating ? "Generating..." : hasGeneratedContent ? "Regenerate" : "Generate Content"}
           </button>
+        )}
+
+        {generatedContent && !transcribing && (
+          <section className="generated-content">
+            <h2>Main Video</h2>
+            <EditableContentField
+              label="Title"
+              value={generatedContent.mainVideo.title}
+              onChange={(value) =>
+                setGeneratedContent((current) =>
+                  current
+                    ? { ...current, mainVideo: { ...current.mainVideo, title: value } }
+                    : current
+                )
+              }
+            />
+            <EditableContentField
+              label="Description"
+              value={generatedContent.mainVideo.description}
+              multiline
+              onChange={(value) =>
+                setGeneratedContent((current) =>
+                  current
+                    ? { ...current, mainVideo: { ...current.mainVideo, description: value } }
+                    : current
+                )
+              }
+            />
+            <EditableContentField
+              label="Tags"
+              value={generatedContent.mainVideo.tags.join(", ")}
+              onChange={(value) =>
+                setGeneratedContent((current) =>
+                  current
+                    ? {
+                        ...current,
+                        mainVideo: {
+                          ...current.mainVideo,
+                          tags: value.split(",").map((tag) => tag.trim()).filter(Boolean),
+                        },
+                      }
+                    : current
+                )
+              }
+            />
+            {contentSettings.addToSuitablePlaylist && (
+              <div className="playlist-control">
+                <label htmlFor="playlist-select">Playlist</label>
+                <select
+                  id="playlist-select"
+                  value={selectedPlaylistId}
+                  onChange={(event) => setSelectedPlaylistId(event.target.value)}
+                  onFocus={() => {
+                    if (!playlists.length) void loadPlaylists();
+                  }}
+                >
+                  <option value="">No playlist</option>
+                  {playlists.map((playlist) => (
+                    <option key={playlist.id} value={playlist.id}>
+                      {playlist.title}
+                      {playlist.id === recommendedPlaylistId ? " (Recommended)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button type="button" className="publish-button">Publish Main Video</button>
+
+            {contentSettings.enableShort && generatedContent.short && (
+              <div className="short-video-section">
+                <h2>Short Video</h2>
+                {shortPreviewUrl && (
+                  <video
+                    className="video-preview"
+                    src={shortPreviewUrl}
+                    controls
+                    preload="metadata"
+                    aria-label="Short video preview"
+                  />
+                )}
+                <EditableContentField
+                  label="Title"
+                  value={generatedContent.short.title}
+                  onChange={(value) =>
+                    setGeneratedContent((current) =>
+                      current?.short
+                        ? { ...current, short: { ...current.short, title: value } }
+                        : current
+                    )
+                  }
+                />
+                <EditableContentField
+                  label="Description"
+                  value={generatedContent.short.description}
+                  multiline
+                  onChange={(value) =>
+                    setGeneratedContent((current) =>
+                      current?.short
+                        ? { ...current, short: { ...current.short, description: value } }
+                        : current
+                    )
+                  }
+                />
+                <EditableContentField
+                  label="Hashtags"
+                  value={generatedContent.short.hashtags.join(" ")}
+                  onChange={(value) =>
+                    setGeneratedContent((current) =>
+                      current?.short
+                        ? {
+                            ...current,
+                            short: {
+                              ...current.short,
+                              hashtags: value.split(/\s+/).map((tag) => tag.trim()).filter(Boolean),
+                            },
+                          }
+                        : current
+                    )
+                  }
+                />
+                <button type="button" className="publish-button">Publish Short Video</button>
+              </div>
+            )}
+          </section>
         )}
       </section>
 
@@ -413,6 +619,32 @@ export const Authenticated: React.FC = () => {
     </main>
   );
 };
+
+type EditableContentFieldProps = {
+  label: string;
+  value: string;
+  multiline?: boolean;
+  onChange: (value: string) => void;
+};
+
+const EditableContentField: React.FC<EditableContentFieldProps> = ({
+  label,
+  value,
+  multiline = false,
+  onChange,
+}) => (
+  <label className="content-field">
+    <span>{label}</span>
+    <div className="content-field-input">
+      {multiline ? (
+        <textarea value={value} onChange={(event) => onChange(event.target.value)} rows={4} />
+      ) : (
+        <input value={value} onChange={(event) => onChange(event.target.value)} />
+      )}
+      <button type="button" className="field-regenerate">Regenerate</button>
+    </div>
+  </label>
+);
 
 const YouTubeIcon: React.FC = () => (
   <svg className="action-icon youtube-icon" viewBox="0 0 24 24" aria-hidden="true">

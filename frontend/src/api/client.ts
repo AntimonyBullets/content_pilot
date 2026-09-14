@@ -52,6 +52,31 @@ export interface ContentSettings {
   llmModel: string;
 }
 
+export interface GeneratedMainVideo {
+  title: string;
+  description: string;
+  tags: string[];
+}
+
+export interface GeneratedShortVideo {
+  title: string;
+  description: string;
+  hashtags: string[];
+  startTime?: number | null;
+  endTime?: number | null;
+}
+
+export interface GeneratedContent {
+  mainVideo: GeneratedMainVideo;
+  short?: GeneratedShortVideo | null;
+}
+
+export interface YouTubePlaylist {
+  id: string;
+  title: string;
+  description?: string;
+}
+
 // Authentication API calls
 export const registerUser = async (name: string, email: string, password: string) => {
   const response = await api.post<{ message: string; user: User }>("/api/auth/register", {
@@ -95,6 +120,11 @@ export const getYouTubeConnectUrl = () => {
   return `${API_BASE_URL}/api/youtube/connect`;
 };
 
+export const getYouTubePlaylists = async () => {
+  const response = await api.get<{ playlists: YouTubePlaylist[] }>("/api/youtube/playlists");
+  return response.data;
+};
+
 export const transcribeVideo = async (video: File) => {
   const formData = new FormData();
   formData.append("video", video);
@@ -107,15 +137,27 @@ export const transcribeVideoUrl = async (videoUrl: string) => {
   return response.data;
 };
 
+export const getShortPreview = async (sessionId: string) => {
+  const response = await api.get<Blob>(`/api/videos/short-preview/${sessionId}`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
 export const generateContent = async (
   sessionId: string,
   transcript: Transcript,
   settings: ContentSettings
 ) => {
-  const response = await api.post<{ message: string; sessionId: string }>("/api/content/generate", {
-    sessionId,
-    transcript,
-    settings,
-  });
+  const response = await api.post<{
+    message: string;
+    sessionId: string;
+    content: GeneratedContent;
+    playlist: YouTubePlaylist | null;
+  }>("/api/content/generate", {
+      sessionId,
+      transcript,
+      settings,
+    });
   return response.data;
 };

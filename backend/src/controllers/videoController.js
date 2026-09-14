@@ -2,6 +2,7 @@ import fs from "fs";
 import VideoSession from "../models/VideoSession.js";
 import { transcribeVideo } from "../services/transcriptionService.js";
 import { downloadVideo } from "../services/videoDownloadService.js";
+import { createShortClip, cleanupShortFile } from "../services/shortGenerationService.js";
 
 // ---------------------------------------------------------------------------
 // Cleanup helper — removes the file only on failure paths.
@@ -122,4 +123,43 @@ export const transcribeUploadedVideo = async (req, res) => {
     transcript,
     sessionId: session._id,
   });
+};
+
+export const previewShortVideo = async (req, res) => {
+  const session = await VideoSession.findOne({
+    _id: req.params.sessionId,
+    userId: req.user._id,
+  });
+  const short = session?.generatedContent?.short;
+
+  if (!session || !short) {
+    return res.status(404).json({ message: "Short video content not found" });
+  }
+
+  if (
+    short.startTime === null ||
+    short.startTime === undefined ||
+    short.endTime === null ||
+    short.endTime === undefined ||
+    short.endTime <= short.startTime
+  ) {
+    return res.status(400).json({ message: "Short timestamps are invalid" });
+  }
+
+  let shortClipPath;
+  try {
+    shortClipPath = await createShortClip(session.originalVideoPath, short.startTime, short.endTime);
+    res.type("mp4");
+    const stream = fs.createReadStream(shortClipPath);
+    stream.on("error", async (error) => {
+      await cleanupShortFile(shortClipPath);
+      if (!res.headersSent) res.status(500).json({ message: "Unable to stream Short preview" });
+      else res.destroy(error);
+    });
+    res.on("finish", () => void cleanupShortFile(shortClipPath));
+    stream.pipe(res);
+  } catch (error) {
+    await cleanupShortFile(shortClipPath);
+    return res.status(500).json({ message: "Unable to create Short preview" });
+  }
 };
