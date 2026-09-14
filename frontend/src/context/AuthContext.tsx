@@ -141,9 +141,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const clearNotice = () => {
+  const clearNotice = useCallback(() => {
     setYoutubeNotice(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

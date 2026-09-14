@@ -44,6 +44,14 @@ export interface TranscriptionResponse {
   sessionId: string;
 }
 
+export interface ContentSettings {
+  enableShort: boolean;
+  automateEntireProcess: boolean;
+  createChapters: boolean;
+  addToSuitablePlaylist: boolean;
+  llmModel: string;
+}
+
 // Authentication API calls
 export const registerUser = async (name: string, email: string, password: string) => {
   const response = await api.post<{ message: string; user: User }>("/api/auth/register", {
@@ -99,17 +107,15 @@ export const transcribeVideoUrl = async (videoUrl: string) => {
   return response.data;
 };
 
-export const generateContent = async (sessionId: string, transcript: Transcript) => {
+export const generateContent = async (
+  sessionId: string,
+  transcript: Transcript,
+  settings: ContentSettings
+) => {
   const response = await api.post<{ message: string; sessionId: string }>("/api/content/generate", {
     sessionId,
     transcript,
-    settings: {
-      enableShort: false,
-      automateEntireProcess: false,
-      createChapters: false,
-      addToSuitablePlaylist: false,
-      llmModel: "gemini",
-    },
+    settings,
   });
   return response.data;
 };
