@@ -289,6 +289,42 @@ export const saveThumbnail = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
+// POST /api/youtube/thumbnail/short/:sessionId
+// Requires ContentPilot authentication + thumbnail upload middleware.
+// Saves the uploaded Short thumbnail path independently from the Main video.
+// ---------------------------------------------------------------------------
+
+export const saveShortThumbnail = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Thumbnail image file is required" });
+    }
+
+    const session = await VideoSession.findOne({
+      _id: sessionId,
+      userId: req.user._id,
+    });
+
+    if (!session) {
+      return res.status(404).json({ message: "Video session not found" });
+    }
+
+    session.shortThumbnailPath = req.file.path;
+    await session.save();
+
+    return res.status(200).json({
+      message: "Short thumbnail saved successfully",
+      thumbnailPath: req.file.path,
+    });
+  } catch (error) {
+    console.error("[YouTube] Short thumbnail save error:", error.message);
+    return res.status(500).json({ message: "Unable to save Short thumbnail" });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Internal error handler for publishing endpoints
 // ---------------------------------------------------------------------------
 

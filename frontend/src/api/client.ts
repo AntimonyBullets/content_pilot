@@ -144,6 +144,26 @@ export const getShortPreview = async (sessionId: string) => {
   return response.data;
 };
 
+export const uploadThumbnail = async (sessionId: string, thumbnail: File) => {
+  const formData = new FormData();
+  formData.append("thumbnail", thumbnail);
+  const response = await api.post<{ message: string; thumbnailPath: string }>(
+    `/api/youtube/thumbnail/${sessionId}`,
+    formData
+  );
+  return response.data;
+};
+
+export const uploadShortThumbnail = async (sessionId: string, thumbnail: File) => {
+  const formData = new FormData();
+  formData.append("thumbnail", thumbnail);
+  const response = await api.post<{ message: string; thumbnailPath: string }>(
+    `/api/youtube/thumbnail/short/${sessionId}`,
+    formData
+  );
+  return response.data;
+};
+
 export const generateContent = async (
   sessionId: string,
   transcript: Transcript,

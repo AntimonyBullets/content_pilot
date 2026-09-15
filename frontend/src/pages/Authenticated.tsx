@@ -7,6 +7,8 @@ import {
   getYouTubePlaylists,
   transcribeVideo,
   transcribeVideoUrl,
+  uploadShortThumbnail,
+  uploadThumbnail,
 } from "../api/client";
 import type { ContentSettings, GeneratedContent, YouTubePlaylist } from "../api/client";
 import { getYouTubeConnectUrl } from "../api/client";
@@ -37,6 +39,7 @@ export const Authenticated: React.FC = () => {
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null);
   const [shortPreviewUrl, setShortPreviewUrl] = useState<string | null>(null);
+  const [shortPreviewLoading, setShortPreviewLoading] = useState(false);
   const [playlists, setPlaylists] = useState<YouTubePlaylist[]>([]);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [recommendedPlaylistId, setRecommendedPlaylistId] = useState<string | null>(null);
@@ -72,11 +75,14 @@ export const Authenticated: React.FC = () => {
   useEffect(() => {
     if (!sessionId || !generatedContent?.short || !contentSettings.enableShort) {
       setShortPreviewUrl(null);
+      setShortPreviewLoading(false);
       return;
     }
 
     let previewUrl: string | null = null;
     let cancelled = false;
+    setShortPreviewUrl(null);
+    setShortPreviewLoading(true);
 
     void getShortPreview(sessionId)
       .then((blob) => {
@@ -86,6 +92,9 @@ export const Authenticated: React.FC = () => {
       })
       .catch(() => {
         if (!cancelled) setShortPreviewUrl(null);
+      })
+      .finally(() => {
+        if (!cancelled) setShortPreviewLoading(false);
       });
 
     return () => {
@@ -383,12 +392,22 @@ export const Authenticated: React.FC = () => {
                 </select>
               </div>
             )}
+            <ThumbnailUpload
+              sessionId={sessionId}
+              upload={uploadThumbnail}
+              recommendedSize="1280 × 720 px"
+            />
             <button type="button" className="publish-button">Publish Main Video</button>
 
             {contentSettings.enableShort && generatedContent.short && (
               <div className="short-video-section">
                 <h2>Short Video</h2>
-                {shortPreviewUrl && (
+                {shortPreviewLoading && (
+                  <div className="short-preview-status" role="status">
+                    Generating Short Preview...
+                  </div>
+                )}
+                {shortPreviewUrl && !shortPreviewLoading && (
                   <video
                     className="video-preview"
                     src={shortPreviewUrl}
@@ -436,6 +455,11 @@ export const Authenticated: React.FC = () => {
                         : current
                     )
                   }
+                />
+                <ThumbnailUpload
+                  sessionId={sessionId}
+                  upload={uploadShortThumbnail}
+                  recommendedSize="1080 × 1920 px"
                 />
                 <button type="button" className="publish-button">Publish Short Video</button>
               </div>
@@ -619,6 +643,91 @@ export const Authenticated: React.FC = () => {
         </a>
       </footer>
     </main>
+  );
+};
+
+type ThumbnailUploadProps = {
+  sessionId: string | null;
+  upload: (sessionId: string, thumbnail: File) => Promise<{ thumbnailPath: string }>;
+  recommendedSize: string;
+};
+
+const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({
+  sessionId,
+  upload,
+  recommendedSize,
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !sessionId) return;
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    setFileName(file.name);
+    setUploaded(false);
+    setUploadError(null);
+    setUploading(true);
+
+    try {
+      await upload(sessionId, file);
+      setUploaded(true);
+    } catch (requestError) {
+      setUploadError(
+        axios.isAxiosError<{ message?: string }>(requestError)
+          ? requestError.response?.data?.message || "Unable to upload thumbnail."
+          : "Unable to upload thumbnail."
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="thumbnail-upload">
+      <span className="thumbnail-upload-label">Thumbnail (Optional)</span>
+      <small>Recommended size: {recommendedSize}</small>
+      <input
+        ref={fileInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/jpeg,image/png,image/jpg,.jpg,.jpeg,.png"
+        onChange={(event) => void handleFileChange(event)}
+        disabled={!sessionId || uploading}
+      />
+      <button
+        type="button"
+        className="thumbnail-upload-button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={!sessionId || uploading}
+      >
+        {uploading ? "Uploading..." : fileName ? "Choose a different image" : "Choose image"}
+      </button>
+      {previewUrl && (
+        <div className="thumbnail-upload-preview">
+          <img src={previewUrl} alt={`${fileName || "Selected"} thumbnail preview`} />
+          <span>
+            {fileName}
+            {uploaded && " · Uploaded"}
+          </span>
+        </div>
+      )}
+      {uploadError && <small className="thumbnail-upload-error">{uploadError}</small>}
+    </div>
   );
 };
 

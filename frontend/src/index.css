@@ -199,6 +199,16 @@ body {
   background: #000000;
 }
 
+.short-preview-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  background: #000000;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
 .content-field {
   display: block;
   margin-top: 18px;
@@ -255,6 +265,64 @@ body {
   margin-top: 30px;
   padding-top: 26px;
   border-top: 1px solid #444444;
+}
+
+.thumbnail-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 22px;
+  color: #bdbdbd;
+  font-size: 0.85rem;
+}
+
+.thumbnail-upload-label {
+  color: #ffffff;
+}
+
+.thumbnail-upload small {
+  color: #888888;
+  font-size: 0.78rem;
+}
+
+.thumbnail-upload-button {
+  width: auto;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+}
+
+.thumbnail-upload-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  color: #bdbdbd;
+  overflow: hidden;
+}
+
+.thumbnail-upload-preview img {
+  width: 96px;
+  height: 54px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid #555555;
+}
+
+.short-video-section .thumbnail-upload-preview img {
+  width: 54px;
+  height: 96px;
+}
+
+.thumbnail-upload-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thumbnail-upload-error {
+  color: #e08b8b !important;
 }
 
 .publish-button {

@@ -103,6 +103,11 @@ const videoSessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Optional local path for a Short-specific user-uploaded custom thumbnail
+    shortThumbnailPath: {
+      type: String,
+      default: null,
+    },
 
     // Records when the physical source video file was successfully deleted.
     // Kept as historical reference; originalVideoPath is retained regardless.

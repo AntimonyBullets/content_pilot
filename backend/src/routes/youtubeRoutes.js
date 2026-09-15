@@ -9,6 +9,7 @@ import {
   publishMainVideo,
   publishShort,
   saveThumbnail,
+  saveShortThumbnail,
   getUserPlaylistsHandler,
 } from "../controllers/youtubeController.js";
 
@@ -31,5 +32,11 @@ router.post("/publish/short", protect, publishShort);
 
 // Thumbnail upload (separate from publish for flexibility)
 router.post("/thumbnail/:sessionId", protect, handleThumbnailUpload, saveThumbnail);
+router.post(
+  "/thumbnail/short/:sessionId",
+  protect,
+  handleThumbnailUpload,
+  saveShortThumbnail
+);
 
 export default router;

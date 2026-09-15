@@ -57,6 +57,14 @@ const checkSourceVideoAccessible = async (session) => {
   }
 };
 
+const cleanupThumbnailFile = async (filePath) => {
+  if (!filePath) return;
+
+  await fs.promises.rm(filePath, { force: true }).catch((error) => {
+    console.warn("[Cleanup] Thumbnail cleanup failed:", error.message);
+  });
+};
+
 // ---------------------------------------------------------------------------
 // Playlist selection via LLM
 //
@@ -356,7 +364,8 @@ export const publishShort = async (userId, sessionId) => {
     session.short.errorMessage = error.message;
     await session.save();
 
-    // Always clean up temp file on failure
+    // Always clean up temp files on failure. Keep the Short thumbnail until
+    // the successful publish path applies it, so a failed upload can be retried.
     await cleanupShortFile(shortClipPath);
     throw error;
   }
@@ -367,6 +376,20 @@ export const publishShort = async (userId, sessionId) => {
   session.short.publishedAt = new Date();
   session.short.errorMessage = null;
   await session.save();
+
+  // Optional: set the Short custom thumbnail after the Short upload succeeds.
+  // This is non-fatal, matching Main video thumbnail behavior.
+  if (session.shortThumbnailPath) {
+    try {
+      await setThumbnail(userId, youtubeVideoId, session.shortThumbnailPath);
+    } catch (thumbError) {
+      console.warn("[Thumbnail] Failed to set Short custom thumbnail:", thumbError.message);
+    } finally {
+      await cleanupThumbnailFile(session.shortThumbnailPath);
+      session.shortThumbnailPath = null;
+      await session.save();
+    }
+  }
 
   // Step 4: Clean up temp Short clip (always, after successful upload)
   await cleanupShortFile(shortClipPath);
@@ -446,6 +469,11 @@ export const cleanupSourceVideo = async (session) => {
       console.warn("[Cleanup] Source video cleanup failed:", error.message);
     }
   });
+
+  // A Short thumbnail may remain when publishing failed before the Short
+  // reached the thumbnail step. Remove it when the session is finalized.
+  await cleanupThumbnailFile(session.shortThumbnailPath);
+  session.shortThumbnailPath = null;
 
   // Record cleanup time, regardless of whether the file was already missing.
   session.sourceVideoCleanedAt = new Date();
