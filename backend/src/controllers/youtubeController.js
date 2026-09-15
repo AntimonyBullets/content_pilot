@@ -198,19 +198,29 @@ export const disconnectYouTube = async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/youtube/publish/main
 // Requires ContentPilot authentication.
-// Body: { sessionId }
+// Body: {
+//   sessionId,
+//   content?: { title, description, tags },
+//   playlistId?: string | null
+// }
 // Publishes the main video for the given session to YouTube.
 // ---------------------------------------------------------------------------
 
 export const publishMainVideo = async (req, res) => {
   try {
-    const { sessionId } = req.body;
+    const { sessionId, content, playlistId } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({ message: "sessionId is required" });
     }
 
-    const result = await publishMainVideoService(req.user._id, sessionId, null);
+    const result = await publishMainVideoService(
+      req.user._id,
+      sessionId,
+      null,
+      content,
+      playlistId
+    );
 
     return res.status(200).json({
       message: "Main video published to YouTube successfully",
@@ -227,19 +237,19 @@ export const publishMainVideo = async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/youtube/publish/short
 // Requires ContentPilot authentication.
-// Body: { sessionId }
+// Body: { sessionId, content?: { title, description, hashtags } }
 // Creates and publishes the YouTube Short for the given session.
 // ---------------------------------------------------------------------------
 
 export const publishShort = async (req, res) => {
   try {
-    const { sessionId } = req.body;
+    const { sessionId, content } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({ message: "sessionId is required" });
     }
 
-    const result = await publishShortService(req.user._id, sessionId);
+    const result = await publishShortService(req.user._id, sessionId, content);
 
     return res.status(200).json({
       message: "Short published to YouTube successfully",
@@ -347,6 +357,10 @@ const handlePublishError = (error, res, assetLabel) => {
   }
 
   if (error.code === "MISSING_GENERATED_CONTENT" || error.code === "MISSING_SHORT_DATA") {
+    return res.status(400).json({ message: error.message });
+  }
+
+  if (error.code === "INVALID_PUBLISH_CONTENT") {
     return res.status(400).json({ message: error.message });
   }
 

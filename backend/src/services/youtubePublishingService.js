@@ -35,6 +35,90 @@ const assertSessionOwnership = async (userId, sessionId) => {
   return session;
 };
 
+const applyMainPublishContent = (session, content) => {
+  if (content === undefined) return;
+  if (!session.generatedContent?.mainVideo) {
+    const error = new Error("Generated main video content is missing");
+    error.code = "MISSING_GENERATED_CONTENT";
+    throw error;
+  }
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    const error = new Error("Main video content must be an object");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+
+  const { title, description, tags } = content;
+  if (typeof title !== "string" || !title.trim()) {
+    const error = new Error("Main video title is required");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+  if (description !== undefined && typeof description !== "string") {
+    const error = new Error("Main video description must be a string");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+  if (tags !== undefined && (!Array.isArray(tags) || tags.some((tag) => typeof tag !== "string"))) {
+    const error = new Error("Main video tags must be an array of strings");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+
+  session.generatedContent.mainVideo.title = title;
+  if (description !== undefined) session.generatedContent.mainVideo.description = description;
+  if (tags !== undefined) session.generatedContent.mainVideo.tags = tags;
+};
+
+const applyShortPublishContent = (session, content) => {
+  if (content === undefined) return;
+  if (!session.generatedContent?.short) {
+    const error = new Error("Generated Short content is missing");
+    error.code = "MISSING_SHORT_DATA";
+    throw error;
+  }
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    const error = new Error("Short content must be an object");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+
+  const { title, description, hashtags } = content;
+  if (typeof title !== "string" || !title.trim()) {
+    const error = new Error("Short title is required");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+  if (description !== undefined && typeof description !== "string") {
+    const error = new Error("Short description must be a string");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+  if (
+    hashtags !== undefined &&
+    (!Array.isArray(hashtags) || hashtags.some((hashtag) => typeof hashtag !== "string"))
+  ) {
+    const error = new Error("Short hashtags must be an array of strings");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+
+  session.generatedContent.short.title = title;
+  if (description !== undefined) session.generatedContent.short.description = description;
+  if (hashtags !== undefined) session.generatedContent.short.hashtags = hashtags;
+};
+
+const applyMainPublishPlaylist = (session, playlistId) => {
+  if (playlistId === undefined) return;
+  if (playlistId !== null && typeof playlistId !== "string") {
+    const error = new Error("playlistId must be a string or null");
+    error.code = "INVALID_PUBLISH_CONTENT";
+    throw error;
+  }
+
+  session.selectedPlaylistId = playlistId ? playlistId.trim() || null : null;
+};
+
 const assertSourceVideoExists = (session) => {
   if (!session.originalVideoPath) {
     const error = new Error("Source video path is not recorded on this session");
@@ -191,7 +275,13 @@ const attemptPlaylistAssignment = async (userId, session, youtubeVideoId) => {
 // Publish the main video
 // ---------------------------------------------------------------------------
 
-export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
+export const publishMainVideo = async (
+  userId,
+  sessionId,
+  thumbnailPath,
+  content,
+  playlistId
+) => {
   await assertYouTubeConnected(userId);
 
   const session = await assertSessionOwnership(userId, sessionId);
@@ -210,6 +300,10 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
     error.code = "ALREADY_PUBLISHING";
     throw error;
   }
+
+  applyMainPublishContent(session, content);
+  applyMainPublishPlaylist(session, playlistId);
+  await session.save();
 
   // Validate required content
   if (!session.generatedContent?.mainVideo?.title) {
@@ -253,6 +347,8 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
   const effectiveThumbnailPath =
     thumbnailPath || session.thumbnailPath || session.generatedThumbnailPath || null;
 
+  console.log("[Thumbnail] Main thumbnail path:", effectiveThumbnailPath);
+
   if (effectiveThumbnailPath) {
     try {
       await setThumbnail(userId, youtubeVideoId, effectiveThumbnailPath);
@@ -282,7 +378,7 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
 // Publish the YouTube Short
 // ---------------------------------------------------------------------------
 
-export const publishShort = async (userId, sessionId) => {
+export const publishShort = async (userId, sessionId, content) => {
   await assertYouTubeConnected(userId);
 
   const session = await assertSessionOwnership(userId, sessionId);
@@ -301,6 +397,9 @@ export const publishShort = async (userId, sessionId) => {
     error.code = "ALREADY_PUBLISHING";
     throw error;
   }
+
+  applyShortPublishContent(session, content);
+  await session.save();
 
   // Validate Short content exists
   const shortData = session.generatedContent?.short;
@@ -390,6 +489,8 @@ export const publishShort = async (userId, sessionId) => {
 
   // Optional: set the Short custom thumbnail after the Short upload succeeds.
   // This is non-fatal, matching Main video thumbnail behavior.
+  console.log("[Thumbnail] Short thumbnail path:", session.shortThumbnailPath);
+
   if (session.shortThumbnailPath) {
     try {
       await setThumbnail(userId, youtubeVideoId, session.shortThumbnailPath);

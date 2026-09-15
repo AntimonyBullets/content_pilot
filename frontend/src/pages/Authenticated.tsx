@@ -6,6 +6,9 @@ import {
   getGeneratedThumbnail,
   getShortPreview,
   getYouTubePlaylists,
+  publishMainVideo,
+  publishShortVideo,
+  regenerateContentField,
   transcribeVideo,
   transcribeVideoUrl,
   uploadShortThumbnail,
@@ -16,6 +19,11 @@ import { getYouTubeConnectUrl } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 type SettingsTab = "general" | "account";
+type RegenerationTarget = {
+  contentType: "mainVideo" | "short";
+  field: "title" | "description" | "tags" | "hashtags";
+  label: string;
+};
 
 export const Authenticated: React.FC = () => {
   const {
@@ -48,6 +56,11 @@ export const Authenticated: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [regenerationTarget, setRegenerationTarget] = useState<RegenerationTarget | null>(null);
+  const [regenerationMessage, setRegenerationMessage] = useState("");
+  const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
+  const [publishingMain, setPublishingMain] = useState(false);
+  const [publishingShort, setPublishingShort] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [contentSettings, setContentSettings] = useState<ContentSettings>({
@@ -221,6 +234,89 @@ export const Authenticated: React.FC = () => {
     }
   };
 
+  const openRegeneration = (target: RegenerationTarget) => {
+    setError(null);
+    setRegenerationMessage("");
+    setRegenerationTarget(target);
+  };
+
+  const handleRegenerate = async () => {
+    if (!sessionId || !regenerationTarget || regeneratingField) return;
+
+    const target = regenerationTarget;
+    const fieldKey = `${target.contentType}.${target.field}`;
+    setRegeneratingField(fieldKey);
+    setError(null);
+
+    try {
+      const response = await regenerateContentField({
+        sessionId,
+        contentType: target.contentType,
+        field: target.field,
+        message: regenerationMessage.trim(),
+      });
+      const value = response.regeneratedField.value;
+
+      setGeneratedContent((current) => {
+        if (!current) return current;
+        if (target.contentType === "mainVideo") {
+          return {
+            ...current,
+            mainVideo: {
+              ...current.mainVideo,
+              [target.field]: value,
+            },
+          };
+        }
+        if (!current.short) return current;
+        return {
+          ...current,
+          short: {
+            ...current.short,
+            [target.field]: value,
+          },
+        };
+      });
+      setRegenerationTarget(null);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Unable to regenerate this field."));
+    } finally {
+      setRegeneratingField(null);
+    }
+  };
+
+  const handlePublishMain = async () => {
+    if (!sessionId || !generatedContent || publishingMain) return;
+    setPublishingMain(true);
+    setError(null);
+    try {
+      const response = await publishMainVideo(
+        sessionId,
+        generatedContent.mainVideo,
+        selectedPlaylistId || null
+      );
+      setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Unable to publish the Main Video."));
+    } finally {
+      setPublishingMain(false);
+    }
+  };
+
+  const handlePublishShort = async () => {
+    if (!sessionId || !generatedContent?.short || publishingShort) return;
+    setPublishingShort(true);
+    setError(null);
+    try {
+      const response = await publishShortVideo(sessionId, generatedContent.short);
+      setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Unable to publish the Short."));
+    } finally {
+      setPublishingShort(false);
+    }
+  };
+
   async function loadPlaylists() {
     try {
       const response = await getYouTubePlaylists();
@@ -372,6 +468,14 @@ export const Authenticated: React.FC = () => {
                     : current
                 )
               }
+              onRegenerate={() =>
+                openRegeneration({
+                  contentType: "mainVideo",
+                  field: "title",
+                  label: "Main Video Title",
+                })
+              }
+              regenerating={regeneratingField === "mainVideo.title"}
             />
             <EditableContentField
               label="Description"
@@ -384,6 +488,14 @@ export const Authenticated: React.FC = () => {
                     : current
                 )
               }
+              onRegenerate={() =>
+                openRegeneration({
+                  contentType: "mainVideo",
+                  field: "description",
+                  label: "Main Video Description",
+                })
+              }
+              regenerating={regeneratingField === "mainVideo.description"}
             />
             <EditableContentField
               label="Tags"
@@ -402,6 +514,14 @@ export const Authenticated: React.FC = () => {
                     : current
                 )
               }
+              onRegenerate={() =>
+                openRegeneration({
+                  contentType: "mainVideo",
+                  field: "tags",
+                  label: "Main Video Tags",
+                })
+              }
+              regenerating={regeneratingField === "mainVideo.tags"}
             />
             {contentSettings.addToSuitablePlaylist && (
               <div className="playlist-control">
@@ -430,7 +550,14 @@ export const Authenticated: React.FC = () => {
               recommendedSize="1280 × 720 px"
               generatedPreviewUrl={generatedThumbnailUrl}
             />
-            <button type="button" className="publish-button">Publish Main Video</button>
+            <button
+              type="button"
+              className="publish-button"
+              onClick={() => void handlePublishMain()}
+              disabled={publishingMain || publishingShort}
+            >
+              {publishingMain ? "Publishing..." : "Publish Main Video"}
+            </button>
 
             {contentSettings.enableShort && generatedContent.short && (
               <div className="short-video-section">
@@ -459,6 +586,14 @@ export const Authenticated: React.FC = () => {
                         : current
                     )
                   }
+                  onRegenerate={() =>
+                    openRegeneration({
+                      contentType: "short",
+                      field: "title",
+                      label: "Short Title",
+                    })
+                  }
+                  regenerating={regeneratingField === "short.title"}
                 />
                 <EditableContentField
                   label="Description"
@@ -471,6 +606,14 @@ export const Authenticated: React.FC = () => {
                         : current
                     )
                   }
+                  onRegenerate={() =>
+                    openRegeneration({
+                      contentType: "short",
+                      field: "description",
+                      label: "Short Description",
+                    })
+                  }
+                  regenerating={regeneratingField === "short.description"}
                 />
                 <EditableContentField
                   label="Hashtags"
@@ -488,18 +631,80 @@ export const Authenticated: React.FC = () => {
                         : current
                     )
                   }
+                  onRegenerate={() =>
+                    openRegeneration({
+                      contentType: "short",
+                      field: "hashtags",
+                      label: "Short Hashtags",
+                    })
+                  }
+                  regenerating={regeneratingField === "short.hashtags"}
                 />
                 <ThumbnailUpload
                   sessionId={sessionId}
                   upload={uploadShortThumbnail}
                   recommendedSize="1080 × 1920 px"
                 />
-                <button type="button" className="publish-button">Publish Short Video</button>
+                <button
+                  type="button"
+                  className="publish-button"
+                  onClick={() => void handlePublishShort()}
+                  disabled={publishingShort || publishingMain}
+                >
+                  {publishingShort ? "Publishing..." : "Publish Short Video"}
+                </button>
               </div>
             )}
           </section>
         )}
       </section>
+
+      {regenerationTarget && (
+        <div
+          className="regeneration-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => {
+            if (!regeneratingField) setRegenerationTarget(null);
+          }}
+        >
+          <div
+            className="regeneration-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="regeneration-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="regeneration-modal-title">Regenerate {regenerationTarget.label}</h2>
+            <label htmlFor="regeneration-instruction">Optional instruction</label>
+            <textarea
+              id="regeneration-instruction"
+              value={regenerationMessage}
+              onChange={(event) => setRegenerationMessage(event.target.value)}
+              placeholder="Leave empty to regenerate normally."
+              disabled={Boolean(regeneratingField)}
+              rows={3}
+            />
+            {regeneratingField && <small>Regenerating...</small>}
+            <div className="regeneration-modal-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setRegenerationTarget(null)}
+                disabled={Boolean(regeneratingField)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRegenerate()}
+                disabled={Boolean(regeneratingField)}
+              >
+                {regeneratingField ? "Regenerating..." : "Proceed"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <div
@@ -780,6 +985,8 @@ type EditableContentFieldProps = {
   value: string;
   multiline?: boolean;
   onChange: (value: string) => void;
+  onRegenerate: () => void;
+  regenerating?: boolean;
 };
 
 const EditableContentField: React.FC<EditableContentFieldProps> = ({
@@ -787,6 +994,8 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({
   value,
   multiline = false,
   onChange,
+  onRegenerate,
+  regenerating = false,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -812,7 +1021,14 @@ const EditableContentField: React.FC<EditableContentFieldProps> = ({
         ) : (
           <input value={value} onChange={(event) => onChange(event.target.value)} />
         )}
-        <button type="button" className="field-regenerate">Regenerate</button>
+        <button
+          type="button"
+          className="field-regenerate"
+          onClick={onRegenerate}
+          disabled={regenerating}
+        >
+          {regenerating ? "..." : "Regenerate"}
+        </button>
       </div>
     </label>
   );

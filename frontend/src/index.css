@@ -250,6 +250,62 @@ body {
   font-size: 0.78rem;
 }
 
+.regeneration-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.regeneration-modal {
+  width: min(100%, 360px);
+  padding: 22px;
+  border: 1px solid #444444;
+  background: #1e1e1e;
+}
+
+.regeneration-modal h2 {
+  margin-bottom: 18px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.regeneration-modal label,
+.regeneration-modal small {
+  display: block;
+  margin-bottom: 7px;
+  color: #bdbdbd;
+  font-size: 0.82rem;
+}
+
+.regeneration-modal textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px;
+  border: 1px solid #555555;
+  background: #121212;
+  color: #ffffff;
+  font: inherit;
+  resize: vertical;
+}
+
+.regeneration-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.regeneration-modal-actions button {
+  width: auto;
+  margin: 0;
+}
+
 .playlist-control {
   margin-top: 22px;
 }

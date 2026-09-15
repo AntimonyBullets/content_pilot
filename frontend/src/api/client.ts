@@ -72,6 +72,13 @@ export interface GeneratedContent {
   short?: GeneratedShortVideo | null;
 }
 
+export type RegeneratableContentType = "mainVideo" | "short";
+export type RegeneratableField =
+  | "title"
+  | "description"
+  | "tags"
+  | "hashtags";
+
 export interface YouTubePlaylist {
   id: string;
   title: string;
@@ -174,6 +181,48 @@ export const uploadShortThumbnail = async (sessionId: string, thumbnail: File) =
     `/api/youtube/thumbnail/short/${sessionId}`,
     formData
   );
+  return response.data;
+};
+
+export const regenerateContentField = async (request: {
+  sessionId: string;
+  contentType: RegeneratableContentType;
+  field: RegeneratableField;
+  message?: string;
+}) => {
+  const response = await api.post<{
+    message: string;
+    regeneratedField: {
+      contentType: RegeneratableContentType;
+      field: RegeneratableField;
+      value: string | string[];
+    };
+  }>("/api/content/regenerate", request);
+  return response.data;
+};
+
+export const publishMainVideo = async (
+  sessionId: string,
+  content: GeneratedMainVideo,
+  playlistId: string | null
+) => {
+  const response = await api.post<{
+    message: string;
+    youtubeVideoId: string;
+    title: string;
+    publishedAt: string;
+    assignedPlaylistId: string | null;
+  }>("/api/youtube/publish/main", { sessionId, content, playlistId });
+  return response.data;
+};
+
+export const publishShortVideo = async (sessionId: string, content: GeneratedShortVideo) => {
+  const response = await api.post<{
+    message: string;
+    youtubeVideoId: string;
+    title: string;
+    publishedAt: string;
+  }>("/api/youtube/publish/short", { sessionId, content });
   return response.data;
 };
 
