@@ -116,7 +116,7 @@ const getTranscriptBounds = (segments) => {
   };
 };
 
-const buildFullContentSchema = (enableShort) => {
+const buildFullContentSchema = (enableShort, generateThumbnail) => {
   const properties = {
     mainVideo: {
       type: "object",
@@ -131,6 +131,11 @@ const buildFullContentSchema = (enableShort) => {
   };
 
   const required = ["mainVideo"];
+
+  if (generateThumbnail) {
+    properties.thumbnailPrompt = { type: "string" };
+    required.push("thumbnailPrompt");
+  }
 
   if (enableShort) {
     properties.short = {
@@ -251,6 +256,14 @@ const validateGeneratedContent = (content, enableShort, transcript) => {
   return validatedContent;
 };
 
+const validateThumbnailPrompt = (value) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return null;
+  }
+
+  return value.trim();
+};
+
 const validateRegeneratedField = ({ contentType, field, value, transcript }) => {
   if (field === "tags" || field === "hashtags") {
     return validateStringArray(value, `${contentType}.${field}`);
@@ -273,18 +286,27 @@ export const generateContentFromTranscript = async ({ transcript, settings }) =>
 
   const content = await generateStructuredOutput({
     llmModel: normalizedSettings.llmModel,
-    schema: buildFullContentSchema(normalizedSettings.enableShort),
+    schema: buildFullContentSchema(
+      normalizedSettings.enableShort,
+      normalizedSettings.generateThumbnail
+    ),
     messages: buildFullGenerationMessages({
       transcript: normalizedTranscript,
       settings: normalizedSettings,
     }),
   });
 
-  return validateGeneratedContent(
+  const validatedContent = validateGeneratedContent(
     content,
     normalizedSettings.enableShort,
     normalizedTranscript
   );
+
+  if (normalizedSettings.generateThumbnail) {
+    validatedContent.thumbnailPrompt = validateThumbnailPrompt(content?.thumbnailPrompt);
+  }
+
+  return validatedContent;
 };
 
 export const regenerateContentField = async ({

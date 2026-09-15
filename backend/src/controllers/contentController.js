@@ -127,7 +127,8 @@ export const generateContent = async (req, res) => {
   const { transcript, settings, sessionId } = req.body || {};
 
   try {
-    const content = await generateContentFromTranscript({ transcript, settings });
+    const generatedContent = await generateContentFromTranscript({ transcript, settings });
+    const { thumbnailPrompt, ...content } = generatedContent;
 
     // --- Stateless path (no sessionId) — preserve existing behavior ---
     if (!sessionId) {
@@ -176,10 +177,11 @@ export const generateContent = async (req, res) => {
     let thumbnail = null;
     let thumbnailError = null;
 
-    if (normalizedSettings.generateThumbnail) {
+    if (normalizedSettings.generateThumbnail && thumbnailPrompt) {
       try {
+        console.log("[Thumbnail] Generated thumbnail prompt:", thumbnailPrompt);
         session.generatedThumbnailPath = await generateMainVideoThumbnail({
-          mainVideo: content.mainVideo,
+          thumbnailPrompt,
         });
         await session.save();
         thumbnail = {
@@ -190,6 +192,9 @@ export const generateContent = async (req, res) => {
         thumbnailError = "Unable to generate the Main Video thumbnail.";
         console.error("[Thumbnail] AI thumbnail generation failed:", generationError.message);
       }
+    } else if (normalizedSettings.generateThumbnail) {
+      thumbnailError = "Unable to generate the Main Video thumbnail.";
+      console.warn("[Thumbnail] LLM did not return a valid thumbnail prompt");
     }
 
     // Playlist selection happens during generate (Main video only)

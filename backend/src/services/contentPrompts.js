@@ -37,6 +37,17 @@ export const buildFullGenerationMessages = ({ transcript, settings }) => {
   const shortInstruction = settings.enableShort
     ? "Generate Short metadata and choose startTime and endTime for a concise, meaningful, self-contained segment from the original video. The timestamps must correspond to the provided transcript timeline."
     : "Do not generate Short metadata.";
+  const thumbnailInstruction = settings.generateThumbnail
+    ? [
+        "Also generate thumbnailPrompt as an internal visual concept for the Main Video thumbnail.",
+        "Act as a professional YouTube thumbnail art director.",
+        "Describe only what should be visible: the primary subject, setting, composition, depth, perspective, lighting, mood, and visual symbolism when appropriate.",
+        "Adapt the concept to the actual transcript topic and generated metadata; do not make it generic.",
+        "Do not include people, human faces, portraits, close-up people, animals, or wildlife. Use environments, locations, objects, architecture, scenery, or symbolic imagery instead.",
+        "The image must contain absolutely no words, letters, numbers, captions, headlines, typography, readable signs, logos, watermarks, or UI elements.",
+        "Do not reserve empty space for text. Communicate the topic entirely through visual elements.",
+      ].join(" ")
+    : "Do not generate thumbnailPrompt.";
 
   return [
     ["system", baseSystemPrompt],
@@ -46,6 +57,7 @@ export const buildFullGenerationMessages = ({ transcript, settings }) => {
         "Generate structured content for the provided transcript.",
         chapterInstruction,
         shortInstruction,
+        thumbnailInstruction,
         "",
         "Transcript text:",
         transcript.text,

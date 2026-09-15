@@ -6,23 +6,18 @@ import { TEMP_UPLOAD_DIR } from "../middleware/uploadMiddleware.js";
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/stable-image/generate/sd3";
 const STABILITY_MODEL = "sd3.5-flash";
 
-const buildThumbnailPrompt = ({ title, description, tags }) => {
-  const tagText = Array.isArray(tags) ? tags.slice(0, 10).join(", ") : "";
-
+const buildThumbnailPrompt = (thumbnailPrompt) => {
   return [
-    "Create a professional YouTube thumbnail for the following video.",
+    thumbnailPrompt,
+    "Create a professional YouTube thumbnail using this visual concept.",
     "Use a clear central visual subject, strong contrast, cinematic lighting, and a clean 16:9 composition.",
-    "Visually represent the actual topic using an illustrative scene, environment, object, or scenery rather than a person's face.",
-    "Do not show human faces, portraits, or close-ups of people. Prefer scenery, locations, objects, diagrams, or atmospheric visuals.",
-    "Do not include UI elements, watermarks, logos, or unnecessary text.",
-    "Do not place the video title verbatim on the image unless it is essential to the visual concept.",
-    `Title: ${title}`,
-    `Description: ${description}`,
-    `Tags: ${tagText}`,
+    "The composition must be purely visual and communicate the topic entirely through imagery.",
+    "ABSOLUTELY NO TEXT: no words, letters, numbers, captions, headlines, typography, or readable signs.",
+    "NO LOGOS, NO WATERMARKS, NO UI ELEMENTS, NO PEOPLE, NO HUMAN FACES, NO PORTRAITS, NO ANIMALS, AND NO WILDLIFE.",
   ].join("\n");
 };
 
-export const generateMainVideoThumbnail = async ({ mainVideo }) => {
+export const generateMainVideoThumbnail = async ({ thumbnailPrompt }) => {
   const apiKey = process.env.STABILITY_API_KEY;
 
   if (!apiKey) {
@@ -32,7 +27,7 @@ export const generateMainVideoThumbnail = async ({ mainVideo }) => {
   }
 
   const formData = new FormData();
-  formData.append("prompt", buildThumbnailPrompt(mainVideo));
+  formData.append("prompt", buildThumbnailPrompt(thumbnailPrompt));
   formData.append("model", STABILITY_MODEL);
   formData.append("aspect_ratio", "16:9");
   formData.append("output_format", "png");
