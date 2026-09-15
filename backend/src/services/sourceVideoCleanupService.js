@@ -52,8 +52,8 @@ export const cleanupStaleSourceVideos = async () => {
           `[Cleanup] Could not inspect source video for session ${session._id}:`,
           error.message
         );
+        continue;
       }
-      continue;
     }
 
     await cleanupSourceVideo(session);

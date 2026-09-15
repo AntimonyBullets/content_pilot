@@ -65,6 +65,13 @@ const cleanupThumbnailFile = async (filePath) => {
   });
 };
 
+export const cleanupGeneratedThumbnail = async (session) => {
+  if (!session.generatedThumbnailPath) return;
+
+  await cleanupThumbnailFile(session.generatedThumbnailPath);
+  session.generatedThumbnailPath = null;
+};
+
 // ---------------------------------------------------------------------------
 // Playlist selection via LLM
 //
@@ -243,7 +250,8 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
   await session.save();
 
   // Optional: set custom thumbnail (non-fatal if it fails)
-  const effectiveThumbnailPath = thumbnailPath || session.thumbnailPath || null;
+  const effectiveThumbnailPath =
+    thumbnailPath || session.thumbnailPath || session.generatedThumbnailPath || null;
 
   if (effectiveThumbnailPath) {
     try {
@@ -252,6 +260,9 @@ export const publishMainVideo = async (userId, sessionId, thumbnailPath) => {
       console.warn("[Thumbnail] Failed to set custom thumbnail:", thumbError.message);
     }
   }
+
+  await cleanupGeneratedThumbnail(session);
+  await session.save();
 
   // Optional: playlist assignment (non-fatal)
   await attemptPlaylistAssignment(userId, session, youtubeVideoId);
@@ -470,6 +481,7 @@ export const cleanupSourceVideo = async (session) => {
     }
   });
 
+  await cleanupGeneratedThumbnail(session);
   // A Short thumbnail may remain when publishing failed before the Short
   // reached the thumbnail step. Remove it when the session is finalized.
   await cleanupThumbnailFile(session.shortThumbnailPath);

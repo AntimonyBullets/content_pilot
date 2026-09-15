@@ -12,6 +12,7 @@ import {
 import {
   publishMainVideo as publishMainVideoService,
   publishShort as publishShortService,
+  cleanupGeneratedThumbnail,
 } from "../services/youtubePublishingService.js";
 
 // ---------------------------------------------------------------------------
@@ -274,7 +275,7 @@ export const saveThumbnail = async (req, res) => {
       return res.status(404).json({ message: "Video session not found" });
     }
 
-    // Save the new thumbnail path, replacing any previous one
+    await cleanupGeneratedThumbnail(session);
     session.thumbnailPath = req.file.path;
     await session.save();
 

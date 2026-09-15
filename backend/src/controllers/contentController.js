@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import VideoSession from "../models/VideoSession.js";
 import YouTubeConnection from "../models/YouTubeConnection.js";
 import {
@@ -5,10 +7,12 @@ import {
   regenerateContentField,
 } from "../services/contentGenerationService.js";
 import {
+  cleanupGeneratedThumbnail,
   runAutomationWorkflow,
   selectPlaylistForVideo,
 } from "../services/youtubePublishingService.js";
 import { getUserPlaylists } from "../services/youtubeService.js";
+import { generateMainVideoThumbnail } from "../services/stabilityImageService.js";
 
 // ---------------------------------------------------------------------------
 // Map content generation errors to HTTP status/message pairs
@@ -145,6 +149,10 @@ export const generateContent = async (req, res) => {
       return res.status(404).json({ message: "Video session not found" });
     }
 
+    // A new generation replaces any prior AI thumbnail. Manual thumbnails
+    // remain independent and are never removed here.
+    await cleanupGeneratedThumbnail(session);
+
     // Normalize settings (reuse the same normalizeBool logic applied in contentGenerationService)
     const normalizeBool = (v) => v === true || v === "true" || v === 1 || v === "1";
 
@@ -153,6 +161,7 @@ export const generateContent = async (req, res) => {
       automateEntireProcess: normalizeBool(settings?.automateEntireProcess),
       createChapters: normalizeBool(settings?.createChapters),
       addToSuitablePlaylist: normalizeBool(settings?.addToSuitablePlaylist),
+      generateThumbnail: normalizeBool(settings?.generateThumbnail),
       llmModel: settings?.llmModel || "gemini-3.6-flash",
     };
 
@@ -163,6 +172,25 @@ export const generateContent = async (req, res) => {
     };
     session.settings = normalizedSettings;
     await session.save();
+
+    let thumbnail = null;
+    let thumbnailError = null;
+
+    if (normalizedSettings.generateThumbnail) {
+      try {
+        session.generatedThumbnailPath = await generateMainVideoThumbnail({
+          mainVideo: content.mainVideo,
+        });
+        await session.save();
+        thumbnail = {
+          type: "generated",
+          url: `/api/content/thumbnail/${sessionId}`,
+        };
+      } catch (generationError) {
+        thumbnailError = "Unable to generate the Main Video thumbnail.";
+        console.error("[Thumbnail] AI thumbnail generation failed:", generationError.message);
+      }
+    }
 
     // Playlist selection happens during generate (Main video only)
     const playlist = await selectPlaylistDuringGenerate(req.user._id, session);
@@ -175,6 +203,8 @@ export const generateContent = async (req, res) => {
         content,
         sessionId,
         playlist,
+        thumbnail,
+        thumbnailError,
       });
     }
 
@@ -192,6 +222,8 @@ export const generateContent = async (req, res) => {
         content,
         sessionId,
         playlist,
+        thumbnail,
+        thumbnailError,
         automationSkipped: true,
         automationSkipReason: "YouTube not connected",
       });
@@ -211,6 +243,8 @@ export const generateContent = async (req, res) => {
         content,
         sessionId,
         playlist,
+        thumbnail,
+        thumbnailError,
         automation: {
           attempted: true,
           mainVideo: null,
@@ -230,6 +264,8 @@ export const generateContent = async (req, res) => {
       content,
       sessionId,
       playlist,
+      thumbnail,
+      thumbnailError,
       automation: {
         attempted: true,
         mainVideo: automationResult.mainVideo,
@@ -241,6 +277,31 @@ export const generateContent = async (req, res) => {
     const [status, message] = errorResponse(error);
     console.error("Content generation error:", error.message);
     return res.status(status).json({ message });
+  }
+};
+
+export const getGeneratedThumbnail = async (req, res) => {
+  const session = await VideoSession.findOne({
+    _id: req.params.sessionId,
+    userId: req.user._id,
+  });
+
+  if (!session?.generatedThumbnailPath) {
+    return res.status(404).json({ message: "Generated thumbnail not found" });
+  }
+
+  try {
+    await fs.promises.access(session.generatedThumbnailPath, fs.constants.R_OK);
+    return res
+      .type(path.extname(session.generatedThumbnailPath))
+      .sendFile(path.resolve(session.generatedThumbnailPath));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return res.status(404).json({ message: "Generated thumbnail not found" });
+    }
+
+    console.error("[Thumbnail] Generated thumbnail read failed:", error.message);
+    return res.status(500).json({ message: "Unable to read generated thumbnail" });
   }
 };
 

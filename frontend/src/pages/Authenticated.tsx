@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   generateContent,
+  getGeneratedThumbnail,
   getShortPreview,
   getYouTubePlaylists,
   transcribeVideo,
@@ -40,6 +41,7 @@ export const Authenticated: React.FC = () => {
   const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null);
   const [shortPreviewUrl, setShortPreviewUrl] = useState<string | null>(null);
   const [shortPreviewLoading, setShortPreviewLoading] = useState(false);
+  const [generatedThumbnailUrl, setGeneratedThumbnailUrl] = useState<string | null>(null);
   const [playlists, setPlaylists] = useState<YouTubePlaylist[]>([]);
   const [selectedPlaylistId, setSelectedPlaylistId] = useState("");
   const [recommendedPlaylistId, setRecommendedPlaylistId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export const Authenticated: React.FC = () => {
     automateEntireProcess: false,
     createChapters: false,
     addToSuitablePlaylist: false,
+    generateThumbnail: false,
     llmModel: "gemini-3.6-flash",
   });
   const isConnected = youtubeStatus?.connected ?? false;
@@ -71,6 +74,14 @@ export const Authenticated: React.FC = () => {
       }
     };
   }, [sourceVideoUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (generatedThumbnailUrl) {
+        URL.revokeObjectURL(generatedThumbnailUrl);
+      }
+    };
+  }, [generatedThumbnailUrl]);
 
   useEffect(() => {
     if (!sessionId || !generatedContent?.short || !contentSettings.enableShort) {
@@ -126,6 +137,10 @@ export const Authenticated: React.FC = () => {
     setSessionId(null);
     transcriptRef.current = null;
     setGeneratedContent(null);
+    setGeneratedThumbnailUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
     setHasGeneratedContent(false);
     setSelectedPlaylistId("");
     setRecommendedPlaylistId(null);
@@ -177,11 +192,28 @@ export const Authenticated: React.FC = () => {
     try {
       const response = await generateContent(sessionId, transcriptRef.current, contentSettings);
       setGeneratedContent(response.content);
+      if (response.thumbnail?.type === "generated") {
+        try {
+          const thumbnailBlob = await getGeneratedThumbnail(sessionId);
+          setGeneratedThumbnailUrl((current) => {
+            if (current) URL.revokeObjectURL(current);
+            return URL.createObjectURL(thumbnailBlob);
+          });
+        } catch {
+          setGeneratedThumbnailUrl(null);
+        }
+      } else {
+        setGeneratedThumbnailUrl(null);
+      }
       setHasGeneratedContent(true);
       const recommendedId = response.playlist?.id || null;
       setRecommendedPlaylistId(recommendedId);
       setSelectedPlaylistId(recommendedId || "");
-      setMessage("Content generated successfully.");
+      setMessage(
+        response.thumbnailError
+          ? `Content generated successfully. ${response.thumbnailError}`
+          : "Content generated successfully."
+      );
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to generate content. Please try again."));
     } finally {
@@ -396,6 +428,7 @@ export const Authenticated: React.FC = () => {
               sessionId={sessionId}
               upload={uploadThumbnail}
               recommendedSize="1280 × 720 px"
+              generatedPreviewUrl={generatedThumbnailUrl}
             />
             <button type="button" className="publish-button">Publish Main Video</button>
 
@@ -519,6 +552,7 @@ export const Authenticated: React.FC = () => {
                       ["enableShort", "Enable Short Video"],
                       ["createChapters", "Create Chapters"],
                       ["addToSuitablePlaylist", "Add to Suitable Playlist"],
+                      ["generateThumbnail", "Generate Thumbnail"],
                     ] as const).map(([key, label]) => (
                       <label className="setting-row" key={key}>
                         <span className="setting-copy">
@@ -530,7 +564,9 @@ export const Authenticated: React.FC = () => {
                                 ? "Add chapter timestamps to the generated video description."
                                 : key === "addToSuitablePlaylist"
                                   ? "Choose and add the video to a relevant YouTube playlist."
-                                  : "Automatically continue through generation and publishing when possible."}
+                                  : key === "generateThumbnail"
+                                    ? "Generate an optional AI thumbnail for the Main Video."
+                                    : "Automatically continue through generation and publishing when possible."}
                           </small>
                         </span>
                         <input
@@ -650,12 +686,14 @@ type ThumbnailUploadProps = {
   sessionId: string | null;
   upload: (sessionId: string, thumbnail: File) => Promise<{ thumbnailPath: string }>;
   recommendedSize: string;
+  generatedPreviewUrl?: string | null;
 };
 
 const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({
   sessionId,
   upload,
   recommendedSize,
+  generatedPreviewUrl = null,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -717,6 +755,12 @@ const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({
       >
         {uploading ? "Uploading..." : fileName ? "Choose a different image" : "Choose image"}
       </button>
+      {!previewUrl && generatedPreviewUrl && (
+        <div className="thumbnail-upload-preview">
+          <img src={generatedPreviewUrl} alt="AI-generated Main Video thumbnail preview" />
+          <span>Generated by AI</span>
+        </div>
+      )}
       {previewUrl && (
         <div className="thumbnail-upload-preview">
           <img src={previewUrl} alt={`${fileName || "Selected"} thumbnail preview`} />

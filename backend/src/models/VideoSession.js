@@ -84,6 +84,7 @@ const videoSessionSchema = new mongoose.Schema(
       automateEntireProcess: { type: Boolean, default: false },
       createChapters: { type: Boolean, default: false },
       addToSuitablePlaylist: { type: Boolean, default: false },
+      generateThumbnail: { type: Boolean, default: false },
       llmModel: { type: String, default: "gemini-3.6-flash" },
       _id: false,
     },
@@ -100,6 +101,11 @@ const videoSessionSchema = new mongoose.Schema(
 
     // Optional local path for a user-uploaded custom thumbnail
     thumbnailPath: {
+      type: String,
+      default: null,
+    },
+    // Optional server-generated Main Video thumbnail
+    generatedThumbnailPath: {
       type: String,
       default: null,
     },

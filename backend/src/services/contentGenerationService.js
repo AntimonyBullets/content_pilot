@@ -37,6 +37,7 @@ const normalizeSettings = (settings = {}) => ({
   enableShort: normalizeBool(settings.enableShort),
   automateEntireProcess: normalizeBool(settings.automateEntireProcess),
   createChapters: normalizeBool(settings.createChapters),
+  generateThumbnail: normalizeBool(settings.generateThumbnail),
   llmModel: settings.llmModel || "gemini-3.6-flash",
   addToSuitablePlaylist: normalizeBool(settings.addToSuitablePlaylist),
 });

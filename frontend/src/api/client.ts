@@ -49,6 +49,7 @@ export interface ContentSettings {
   automateEntireProcess: boolean;
   createChapters: boolean;
   addToSuitablePlaylist: boolean;
+  generateThumbnail: boolean;
   llmModel: string;
 }
 
@@ -75,6 +76,11 @@ export interface YouTubePlaylist {
   id: string;
   title: string;
   description?: string;
+}
+
+export interface GeneratedThumbnail {
+  type: "generated";
+  url: string;
 }
 
 // Authentication API calls
@@ -144,6 +150,13 @@ export const getShortPreview = async (sessionId: string) => {
   return response.data;
 };
 
+export const getGeneratedThumbnail = async (sessionId: string) => {
+  const response = await api.get<Blob>(`/api/content/thumbnail/${sessionId}`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
 export const uploadThumbnail = async (sessionId: string, thumbnail: File) => {
   const formData = new FormData();
   formData.append("thumbnail", thumbnail);
@@ -174,6 +187,8 @@ export const generateContent = async (
     sessionId: string;
     content: GeneratedContent;
     playlist: YouTubePlaylist | null;
+    thumbnail?: GeneratedThumbnail | null;
+    thumbnailError?: string | null;
   }>("/api/content/generate", {
       sessionId,
       transcript,
