@@ -125,6 +125,29 @@ export const transcribeUploadedVideo = async (req, res) => {
   });
 };
 
+export const streamSourceVideo = async (req, res) => {
+  const session = await VideoSession.findOne({
+    _id: req.params.sessionId,
+    userId: req.user._id,
+  });
+
+  if (!session?.originalVideoPath) {
+    return res.status(404).json({ message: "Source video not found" });
+  }
+
+  try {
+    await fs.promises.access(session.originalVideoPath, fs.constants.R_OK);
+    return res.sendFile(session.originalVideoPath);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "EACCES") {
+      return res.status(404).json({ message: "Source video not found" });
+    }
+
+    console.error("Source video preview error:", error.message);
+    return res.status(500).json({ message: "Unable to preview source video" });
+  }
+};
+
 export const previewShortVideo = async (req, res) => {
   const session = await VideoSession.findOne({
     _id: req.params.sessionId,

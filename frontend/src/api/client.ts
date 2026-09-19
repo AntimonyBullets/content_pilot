@@ -90,6 +90,30 @@ export interface GeneratedThumbnail {
   url: string;
 }
 
+export interface RestoredVideoSession {
+  id: string;
+  transcript: Transcript;
+  generatedContent: GeneratedContent;
+  settings: ContentSettings;
+  selectedPlaylistId: string | null;
+  assignedPlaylistId: string | null;
+  mainVideo: {
+    status: string;
+    youtubeVideoId: string | null;
+    publishedAt: string | null;
+    errorMessage: string | null;
+  };
+  short: {
+    status: string;
+    youtubeVideoId: string | null;
+    publishedAt: string | null;
+    errorMessage: string | null;
+  };
+  hasGeneratedThumbnail: boolean;
+  hasUploadedThumbnail: boolean;
+  hasShortThumbnail: boolean;
+}
+
 // Authentication API calls
 export const registerUser = async (name: string, email: string, password: string) => {
   const response = await api.post<{ message: string; user: User }>("/api/auth/register", {
@@ -157,10 +181,24 @@ export const getShortPreview = async (sessionId: string) => {
   return response.data;
 };
 
+export const getSourceVideoPreview = async (sessionId: string) => {
+  const response = await api.get<Blob>(`/api/videos/source-preview/${sessionId}`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
 export const getGeneratedThumbnail = async (sessionId: string) => {
   const response = await api.get<Blob>(`/api/content/thumbnail/${sessionId}`, {
     responseType: "blob",
   });
+  return response.data;
+};
+
+export const getLatestVideoSession = async () => {
+  const response = await api.get<{ session: RestoredVideoSession | null }>(
+    "/api/content/session/latest"
+  );
   return response.data;
 };
 

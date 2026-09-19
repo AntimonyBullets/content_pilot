@@ -4,6 +4,8 @@ import axios from "axios";
 import {
   generateContent,
   getGeneratedThumbnail,
+  getLatestVideoSession,
+  getSourceVideoPreview,
   getShortPreview,
   getYouTubePlaylists,
   publishMainVideo,
@@ -79,6 +81,60 @@ export const Authenticated: React.FC = () => {
     const timeoutId = window.setTimeout(clearNotice, 4000);
     return () => window.clearTimeout(timeoutId);
   }, [youtubeNotice, clearNotice]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreLatestSession = async () => {
+      try {
+        const response = await getLatestVideoSession();
+        const restored = response.session;
+
+        if (cancelled || !restored) return;
+
+        setSessionId(restored.id);
+        transcriptRef.current = restored.transcript;
+        setGeneratedContent(restored.generatedContent);
+        setHasGeneratedContent(Boolean(restored.generatedContent?.mainVideo?.title));
+        setContentSettings(restored.settings);
+        setSelectedPlaylistId(restored.selectedPlaylistId || "");
+
+        try {
+          const sourceVideoBlob = await getSourceVideoPreview(restored.id);
+          if (cancelled) return;
+          setSourceVideoUrl((current) => {
+            if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+            return URL.createObjectURL(sourceVideoBlob);
+          });
+        } catch {
+          if (!cancelled) setSourceVideoUrl(null);
+        }
+
+        if (restored.hasGeneratedThumbnail) {
+          try {
+            const thumbnailBlob = await getGeneratedThumbnail(restored.id);
+            if (cancelled) return;
+            setGeneratedThumbnailUrl((current) => {
+              if (current) URL.revokeObjectURL(current);
+              return URL.createObjectURL(thumbnailBlob);
+            });
+          } catch {
+            if (!cancelled) setGeneratedThumbnailUrl(null);
+          }
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          console.error("Failed to restore latest video session:", requestError);
+        }
+      }
+    };
+
+    void restoreLatestSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {

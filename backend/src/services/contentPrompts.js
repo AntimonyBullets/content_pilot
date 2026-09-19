@@ -29,9 +29,19 @@ const baseSystemPrompt = [
   "Do not perform or suggest YouTube API operations.",
 ].join(" ");
 
+const chapterRules = [
+  "YouTube chapter requirements are strict:",
+  "the first chapter timestamp must be exactly 0:00",
+  "include at least 3 chapter timestamps",
+  "timestamps must be in strictly ascending chronological order",
+  "every chapter must be at least 10 seconds long, so the difference between each timestamp and the next timestamp must be at least 10 seconds",
+  "ensure the final chapter also has at least 10 seconds of video remaining",
+  "use the timestamped transcript segments to choose meaningful topic transitions",
+].join(" ");
+
 export const buildFullGenerationMessages = ({ transcript, settings }) => {
   const chapterInstruction = settings.createChapters
-    ? "Include suitable YouTube chapter timestamp lines in the main video description. Chapters must correspond to meaningful topic transitions in the timestamped transcript segments."
+    ? `Include suitable YouTube chapter timestamp lines in the main video description. ${chapterRules}.`
     : "Do not include chapter timestamp lines in the main video description.";
 
   const shortInstruction = settings.enableShort
@@ -80,7 +90,7 @@ export const buildFieldRegenerationMessages = ({
   const chapterInstruction =
   contentType === "mainVideo" && field === "description"
     ? settings.createChapters
-      ? "Include suitable YouTube chapter timestamp lines that correspond to meaningful topic transitions in the timestamped transcript segments."
+      ? `Include suitable YouTube chapter timestamp lines that correspond to meaningful topic transitions in the timestamped transcript segments. ${chapterRules}.`
       : "Do not include any chapter timestamp lines, timestamps, or chapter sections in the main video description. If the current content contains existing chapters or timestamps, remove them from the regenerated description."
     : "Only regenerate the requested field.";
 

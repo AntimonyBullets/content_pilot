@@ -311,6 +311,44 @@ export const getGeneratedThumbnail = async (req, res) => {
 };
 
 // ---------------------------------------------------------------------------
+// GET /api/content/session/latest
+//
+// Restores the most recently updated video session for the authenticated user
+// so a page reload does not discard the transcript or generated content.
+// ---------------------------------------------------------------------------
+
+export const getLatestSession = async (req, res) => {
+  try {
+    const session = await VideoSession.findOne({ userId: req.user._id })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    if (!session) {
+      return res.status(200).json({ session: null });
+    }
+
+    return res.status(200).json({
+      session: {
+        id: session._id,
+        transcript: session.transcript,
+        generatedContent: session.generatedContent,
+        settings: session.settings,
+        selectedPlaylistId: session.selectedPlaylistId,
+        assignedPlaylistId: session.assignedPlaylistId,
+        mainVideo: session.mainVideo,
+        short: session.short,
+        hasGeneratedThumbnail: Boolean(session.generatedThumbnailPath),
+        hasUploadedThumbnail: Boolean(session.thumbnailPath),
+        hasShortThumbnail: Boolean(session.shortThumbnailPath),
+      },
+    });
+  } catch (error) {
+    console.error("Latest video session restore error:", error.message);
+    return res.status(500).json({ message: "Unable to restore the latest video session" });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // POST /api/content/regenerate
 //
 // Regenerates a specific metadata field.
