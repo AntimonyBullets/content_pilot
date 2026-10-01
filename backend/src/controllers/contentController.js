@@ -159,12 +159,29 @@ export const generateContent = async (req, res) => {
 
     const normalizedSettings = {
       enableShort: normalizeBool(settings?.enableShort),
+      cropShortVideo:
+        normalizeBool(settings?.enableShort) && normalizeBool(settings?.cropShortVideo),
       automateEntireProcess: normalizeBool(settings?.automateEntireProcess),
       createChapters: normalizeBool(settings?.createChapters),
       addToSuitablePlaylist: normalizeBool(settings?.addToSuitablePlaylist),
       generateThumbnail: normalizeBool(settings?.generateThumbnail),
       llmModel: settings?.llmModel || "gemini-3.6-flash",
     };
+
+    // A new generation creates new publish candidates. Allow both assets to
+    // be previewed and published again even when the previous versions were
+    // already uploaded.
+    session.mainVideo.status = "not_published";
+    session.mainVideo.youtubeVideoId = null;
+    session.mainVideo.publishedAt = null;
+    session.mainVideo.errorMessage = null;
+
+    if (normalizedSettings.enableShort) {
+      session.short.status = "not_published";
+      session.short.youtubeVideoId = null;
+      session.short.publishedAt = null;
+      session.short.errorMessage = null;
+    }
 
     // Persist generated content and settings snapshot to the session
     session.generatedContent = {
@@ -327,6 +344,22 @@ export const getLatestSession = async (req, res) => {
       return res.status(200).json({ session: null });
     }
 
+    if (session?.sourceVideoCleanedAt || !session?.originalVideoPath) {
+      return res.status(200).json({ session: null });
+    }
+
+    try {
+      await fs.promises.access(session.originalVideoPath, fs.constants.R_OK);
+    } catch (error) {
+      if (!["ENOENT", "EACCES"].includes(error.code)) {
+        console.warn("Latest video session source check failed:", error.message);
+      }
+      return res.status(200).json({ session: null });
+    }
+
+    const mainVideoUploaded = session.mainVideo?.status === "published";
+    const shortVideoUploaded = session.short?.status === "published";
+
     return res.status(200).json({
       session: {
         id: session._id,
@@ -337,6 +370,8 @@ export const getLatestSession = async (req, res) => {
         assignedPlaylistId: session.assignedPlaylistId,
         mainVideo: session.mainVideo,
         short: session.short,
+        mainVideoUploaded,
+        shortVideoUploaded,
         hasGeneratedThumbnail: Boolean(session.generatedThumbnailPath),
         hasUploadedThumbnail: Boolean(session.thumbnailPath),
         hasShortThumbnail: Boolean(session.shortThumbnailPath),
@@ -413,6 +448,13 @@ export const regenerateContent = async (req, res) => {
     // source of truth for future publishing.
     session.generatedContent[contentType][regeneratedField.field] =
       regeneratedField.value;
+    const publishingState = session[contentType];
+    if (publishingState) {
+      publishingState.status = "not_published";
+      publishingState.youtubeVideoId = null;
+      publishingState.publishedAt = null;
+      publishingState.errorMessage = null;
+    }
     await session.save();
 
     return res.status(200).json({

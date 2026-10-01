@@ -357,6 +357,11 @@ export const publishMainVideo = async (
     }
   }
 
+  // Main-video thumbnails are temporary upload artifacts. Remove the
+  // user-uploaded file after the video upload, regardless of thumbnail API
+  // success, so failed thumbnail application does not leave it on disk.
+  await cleanupThumbnailFile(session.thumbnailPath);
+  session.thumbnailPath = null;
   await cleanupGeneratedThumbnail(session);
   await session.save();
 
@@ -458,7 +463,8 @@ export const publishShort = async (userId, sessionId, content) => {
     shortClipPath = await createShortClip(
       session.originalVideoPath,
       shortData.startTime,
-      shortData.endTime
+      shortData.endTime,
+      session.settings?.cropShortVideo === true
     );
 
     // Step 2: Upload to YouTube

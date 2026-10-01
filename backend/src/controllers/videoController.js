@@ -171,7 +171,12 @@ export const previewShortVideo = async (req, res) => {
 
   let shortClipPath;
   try {
-    shortClipPath = await createShortClip(session.originalVideoPath, short.startTime, short.endTime);
+    shortClipPath = await createShortClip(
+      session.originalVideoPath,
+      short.startTime,
+      short.endTime,
+      session.settings?.cropShortVideo === true
+    );
     res.type("mp4");
     const stream = fs.createReadStream(shortClipPath);
     stream.on("error", async (error) => {

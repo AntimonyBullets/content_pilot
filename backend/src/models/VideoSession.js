@@ -81,6 +81,7 @@ const videoSessionSchema = new mongoose.Schema(
     // Settings snapshot from the generate request
     settings: {
       enableShort: { type: Boolean, default: false },
+      cropShortVideo: { type: Boolean, default: false },
       automateEntireProcess: { type: Boolean, default: false },
       createChapters: { type: Boolean, default: false },
       addToSuitablePlaylist: { type: Boolean, default: false },

@@ -48,6 +48,8 @@ export const Authenticated: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [hasGeneratedContent, setHasGeneratedContent] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
+  const [showMainVideo, setShowMainVideo] = useState(true);
+  const [showShortVideo, setShowShortVideo] = useState(true);
   const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null);
   const [shortPreviewUrl, setShortPreviewUrl] = useState<string | null>(null);
   const [shortPreviewLoading, setShortPreviewLoading] = useState(false);
@@ -67,6 +69,7 @@ export const Authenticated: React.FC = () => {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [contentSettings, setContentSettings] = useState<ContentSettings>({
     enableShort: false,
+    cropShortVideo: false,
     automateEntireProcess: false,
     createChapters: false,
     addToSuitablePlaylist: false,
@@ -95,8 +98,18 @@ export const Authenticated: React.FC = () => {
         setSessionId(restored.id);
         transcriptRef.current = restored.transcript;
         setGeneratedContent(restored.generatedContent);
-        setHasGeneratedContent(Boolean(restored.generatedContent?.mainVideo?.title));
-        setContentSettings(restored.settings);
+        setShowMainVideo(!restored.mainVideoUploaded);
+        setShowShortVideo(!restored.shortVideoUploaded);
+        setHasGeneratedContent(
+          Boolean(
+            (!restored.mainVideoUploaded && restored.generatedContent?.mainVideo?.title) ||
+              (!restored.shortVideoUploaded && restored.generatedContent?.short?.title)
+          )
+        );
+        setContentSettings({
+          ...restored.settings,
+          cropShortVideo: restored.settings.cropShortVideo ?? false,
+        });
         setSelectedPlaylistId(restored.selectedPlaylistId || "");
 
         try {
@@ -219,6 +232,8 @@ export const Authenticated: React.FC = () => {
       const response = await transcribe();
       transcriptRef.current = response.transcript;
       setSessionId(response.sessionId);
+      setShowMainVideo(true);
+      setShowShortVideo(true);
       setShowUrlInput(false);
       setMessage("Transcription complete.");
     } catch (requestError) {
@@ -261,6 +276,8 @@ export const Authenticated: React.FC = () => {
     try {
       const response = await generateContent(sessionId, transcriptRef.current, contentSettings);
       setGeneratedContent(response.content);
+      setShowMainVideo(true);
+      setShowShortVideo(Boolean(contentSettings.enableShort && response.content.short));
       if (response.thumbnail?.type === "generated") {
         try {
           const thumbnailBlob = await getGeneratedThumbnail(sessionId);
@@ -333,6 +350,11 @@ export const Authenticated: React.FC = () => {
           },
         };
       });
+      if (target.contentType === "short") {
+        setShowShortVideo(true);
+      } else {
+        setShowMainVideo(true);
+      }
       setRegenerationTarget(null);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to regenerate this field."));
@@ -351,6 +373,12 @@ export const Authenticated: React.FC = () => {
         generatedContent.mainVideo,
         selectedPlaylistId || null
       );
+      setShowMainVideo(false);
+      if (!showShortVideo || !contentSettings.enableShort || !generatedContent.short) {
+        setGeneratedContent(null);
+        setSessionId(null);
+        setSourceVideoUrl(null);
+      }
       setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to publish the Main Video."));
@@ -365,6 +393,12 @@ export const Authenticated: React.FC = () => {
     setError(null);
     try {
       const response = await publishShortVideo(sessionId, generatedContent.short);
+      setShowShortVideo(false);
+      if (!showMainVideo) {
+        setGeneratedContent(null);
+        setSessionId(null);
+        setSourceVideoUrl(null);
+      }
       setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to publish the Short."));
@@ -513,7 +547,9 @@ export const Authenticated: React.FC = () => {
 
         {generatedContent && !transcribing && (
           <section className="generated-content">
-            <h2>Main Video</h2>
+            {showMainVideo && (
+              <>
+                <h2>Main Video</h2>
             <EditableContentField
               label="Title"
               value={generatedContent.mainVideo.title}
@@ -614,8 +650,10 @@ export const Authenticated: React.FC = () => {
             >
               {publishingMain ? "Publishing..." : "Publish Main Video"}
             </button>
+              </>
+            )}
 
-            {contentSettings.enableShort && generatedContent.short && (
+            {showShortVideo && contentSettings.enableShort && generatedContent.short && (
               <div className="short-video-section">
                 <h2>Short Video</h2>
                 {shortPreviewLoading && (
@@ -809,8 +847,49 @@ export const Authenticated: React.FC = () => {
                 <>
                   <h3>General</h3>
                   <div className="settings-list">
+                    <div className="setting-short-group">
+                      <label className="setting-row" key="enableShort">
+                        <span className="setting-copy">
+                          <strong>Enable Short Video</strong>
+                          <small>Generate a short-form version alongside the main video.</small>
+                        </span>
+                        <input
+                          className="toggle-input"
+                          type="checkbox"
+                          checked={contentSettings.enableShort}
+                          onChange={(event) =>
+                            setContentSettings((current) => ({
+                              ...current,
+                              enableShort: event.target.checked,
+                              ...(event.target.checked ? {} : { cropShortVideo: false }),
+                            }))
+                          }
+                        />
+                        <span className="toggle-control" aria-hidden="true" />
+                      </label>
+                      <label className="setting-row setting-subsetting" key="cropShortVideo">
+                        <span className="setting-copy">
+                          <strong>Crop Sides for Short Video</strong>
+                          <small>
+                            Use the original centered crop instead of the blurred canvas.
+                          </small>
+                        </span>
+                        <input
+                          className="toggle-input"
+                          type="checkbox"
+                          checked={contentSettings.cropShortVideo}
+                          disabled={!contentSettings.enableShort}
+                          onChange={(event) =>
+                            setContentSettings((current) => ({
+                              ...current,
+                              cropShortVideo: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span className="toggle-control" aria-hidden="true" />
+                      </label>
+                    </div>
                     {([
-                      ["enableShort", "Enable Short Video"],
                       ["createChapters", "Create Chapters"],
                       ["addToSuitablePlaylist", "Add to Suitable Playlist"],
                       ["generateThumbnail", "Generate Thumbnail"],
@@ -819,15 +898,11 @@ export const Authenticated: React.FC = () => {
                         <span className="setting-copy">
                           <strong>{label}</strong>
                           <small>
-                            {key === "enableShort"
-                              ? "Generate a short-form version alongside the main video."
-                              : key === "createChapters"
-                                ? "Add chapter timestamps to the generated video description."
-                                : key === "addToSuitablePlaylist"
-                                  ? "Choose and add the video to a relevant YouTube playlist."
-                                  : key === "generateThumbnail"
-                                    ? "Generate an optional AI thumbnail for the Main Video."
-                                    : "Automatically continue through generation and publishing when possible."}
+                            {key === "createChapters"
+                              ? "Add chapter timestamps to the generated video description."
+                              : key === "addToSuitablePlaylist"
+                                ? "Choose and add the video to a relevant YouTube playlist."
+                                : "Generate an optional AI thumbnail for the Main Video."}
                           </small>
                         </span>
                         <input

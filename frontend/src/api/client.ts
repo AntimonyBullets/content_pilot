@@ -46,6 +46,7 @@ export interface TranscriptionResponse {
 
 export interface ContentSettings {
   enableShort: boolean;
+  cropShortVideo: boolean;
   automateEntireProcess: boolean;
   createChapters: boolean;
   addToSuitablePlaylist: boolean;
@@ -109,6 +110,8 @@ export interface RestoredVideoSession {
     publishedAt: string | null;
     errorMessage: string | null;
   };
+  mainVideoUploaded: boolean;
+  shortVideoUploaded: boolean;
   hasGeneratedThumbnail: boolean;
   hasUploadedThumbnail: boolean;
   hasShortThumbnail: boolean;

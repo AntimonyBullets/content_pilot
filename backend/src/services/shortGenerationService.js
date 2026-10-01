@@ -41,14 +41,20 @@ const runCommand = (command, args) =>
 //
 // Workflow:
 //   1. Extract the segment [startTime, endTime] from the source video.
-//   2. Re-encode to a 9:16 vertical crop (1080x1920 target, cropped from
-//      center of the original frame) suitable for YouTube Shorts.
+//   2. Re-encode to a 9:16 vertical video suitable for YouTube Shorts. The
+//      default blurred canvas preserves the full source frame; callers can
+//      opt into the legacy centered crop.
 //   3. Writes the output to a temp file and returns its path.
 //
 // The caller is responsible for cleaning up the returned temp file.
 // ---------------------------------------------------------------------------
 
-export const createShortClip = async (sourceVideoPath, startTime, endTime) => {
+export const createShortClip = async (
+  sourceVideoPath,
+  startTime,
+  endTime,
+  cropSides = false
+) => {
   const duration = endTime - startTime;
 
   if (duration <= 0) {
@@ -64,14 +70,11 @@ export const createShortClip = async (sourceVideoPath, startTime, endTime) => {
   const outputFilename = `short-${Date.now()}-${crypto.randomUUID()}.mp4`;
   const outputPath = path.join(TEMP_UPLOAD_DIR, outputFilename);
 
-  // FFmpeg filter chain:
-  //   - crop to the largest centered square, then scale to 1080x1920
-  //   - This produces a 9:16 portrait video suitable for Shorts
-  //   - We use crop=ih:ih (square crop from width) then scale to 1080x1920
-  //   Note: For landscape source videos, we crop the center square and scale
-  //   vertically. This is the standard approach for landscape→Short conversion.
-  const videoFilter =
-    "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920:flags=lanczos";
+  const videoFilter = cropSides
+    ? "crop=in_h*9/16:in_h:(in_w-in_h*9/16)/2:0,scale=1080:1920:flags=lanczos"
+    : "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=25:10[bg];" +
+      "[0:v]scale=1080:-1:flags=lanczos[fg];" +
+      "[bg][fg]overlay=(W-w)/2:(H-h)/2[outv]";
 
   try {
     await runCommand("ffmpeg", [
@@ -79,12 +82,16 @@ export const createShortClip = async (sourceVideoPath, startTime, endTime) => {
       "-ss", String(startTime),
       "-t", String(duration),
       "-i", sourceVideoPath,
-      "-vf", videoFilter,
+      cropSides ? "-vf" : "-filter_complex",
+      videoFilter,
+      "-map", cropSides ? "0:v" : "[outv]",
+      "-map", "0:a?",
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "23",
       "-c:a", "aac",
       "-b:a", "128k",
+      "-pix_fmt", "yuv420p",
       "-movflags", "+faststart",
       outputPath,
     ]);

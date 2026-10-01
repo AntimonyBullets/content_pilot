@@ -33,14 +33,19 @@ const fieldSchemas = {
 const normalizeBool = (value) =>
   value === true || value === "true" || value === 1 || value === "1";
 
-const normalizeSettings = (settings = {}) => ({
-  enableShort: normalizeBool(settings.enableShort),
-  automateEntireProcess: normalizeBool(settings.automateEntireProcess),
-  createChapters: normalizeBool(settings.createChapters),
-  generateThumbnail: normalizeBool(settings.generateThumbnail),
-  llmModel: settings.llmModel || "gemini-3.6-flash",
-  addToSuitablePlaylist: normalizeBool(settings.addToSuitablePlaylist),
-});
+const normalizeSettings = (settings = {}) => {
+  const enableShort = normalizeBool(settings.enableShort);
+
+  return {
+    enableShort,
+    cropShortVideo: enableShort && normalizeBool(settings.cropShortVideo),
+    automateEntireProcess: normalizeBool(settings.automateEntireProcess),
+    createChapters: normalizeBool(settings.createChapters),
+    generateThumbnail: normalizeBool(settings.generateThumbnail),
+    llmModel: settings.llmModel || "gemini-3.6-flash",
+    addToSuitablePlaylist: normalizeBool(settings.addToSuitablePlaylist),
+  };
+};
 
 const isValidSegment = (segment) =>
   segment &&
