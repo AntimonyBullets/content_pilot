@@ -27,6 +27,11 @@ type RegenerationTarget = {
   label: string;
 };
 
+type PublishingNotice = {
+  message: string;
+  videoId: string;
+};
+
 export const Authenticated: React.FC = () => {
   const {
     user,
@@ -60,6 +65,7 @@ export const Authenticated: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [publishingNotice, setPublishingNotice] = useState<PublishingNotice | null>(null);
   const [regenerationTarget, setRegenerationTarget] = useState<RegenerationTarget | null>(null);
   const [regenerationMessage, setRegenerationMessage] = useState("");
   const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
@@ -84,6 +90,17 @@ export const Authenticated: React.FC = () => {
     const timeoutId = window.setTimeout(clearNotice, 4000);
     return () => window.clearTimeout(timeoutId);
   }, [youtubeNotice, clearNotice]);
+
+  useEffect(() => {
+    if (!message && !error) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setMessage(null);
+      setError(null);
+    }, 4000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [message, error]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,7 +183,7 @@ export const Authenticated: React.FC = () => {
   }, [generatedThumbnailUrl]);
 
   useEffect(() => {
-    if (!sessionId || !generatedContent?.short || !contentSettings.enableShort) {
+    if (!sessionId || !generatedContent?.short) {
       setShortPreviewUrl(null);
       setShortPreviewLoading(false);
       return;
@@ -198,13 +215,12 @@ export const Authenticated: React.FC = () => {
     sessionId,
     generatedContent?.short?.startTime,
     generatedContent?.short?.endTime,
-    contentSettings.enableShort,
   ]);
 
   useEffect(() => {
-    if (!contentSettings.addToSuitablePlaylist || !sessionId) return;
+    if (!sessionId) return;
     void loadPlaylists();
-  }, [contentSettings.addToSuitablePlaylist, sessionId]);
+  }, [sessionId]);
 
   const getErrorMessage = (requestError: unknown, fallback: string) => {
     if (axios.isAxiosError<{ message?: string }>(requestError)) {
@@ -374,12 +390,15 @@ export const Authenticated: React.FC = () => {
         selectedPlaylistId || null
       );
       setShowMainVideo(false);
-      if (!showShortVideo || !contentSettings.enableShort || !generatedContent.short) {
+      if (!showShortVideo || !generatedContent.short) {
         setGeneratedContent(null);
         setSessionId(null);
         setSourceVideoUrl(null);
       }
-      setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
+      setPublishingNotice({
+        message: response.message,
+        videoId: response.youtubeVideoId,
+      });
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to publish the Main Video."));
     } finally {
@@ -399,7 +418,10 @@ export const Authenticated: React.FC = () => {
         setSessionId(null);
         setSourceVideoUrl(null);
       }
-      setMessage(`${response.message} (ID: ${response.youtubeVideoId})`);
+      setPublishingNotice({
+        message: response.message,
+        videoId: response.youtubeVideoId,
+      });
     } catch (requestError) {
       setError(getErrorMessage(requestError, "Unable to publish the Short."));
     } finally {
@@ -439,8 +461,13 @@ export const Authenticated: React.FC = () => {
         )}
 
         {youtubeNotice && (
-          <div className="youtube-toast" role="status" onClick={clearNotice}>
-            {youtubeNotice}
+          <div
+            className={`toast toast-ephemeral youtube-toast ${
+              youtubeNotice.isError ? "toast-error" : "toast-success"
+            }`}
+            role="status"
+          >
+            {youtubeNotice.message}
           </div>
         )}
 
@@ -522,9 +549,29 @@ export const Authenticated: React.FC = () => {
         )}
 
         {transcribing && <div className="processing-status">Transcribing video...</div>}
-        {error && <div className="alert-error homepage-message">{error}</div>}
+        {error && !generating && <div className="toast toast-error toast-ephemeral">{error}</div>}
         {message && !generating && (
-          <div className="alert-success homepage-message">{message}</div>
+          <div className="toast toast-success toast-ephemeral">{message}</div>
+        )}
+        {publishingNotice && (
+          <div className="toast toast-success publishing-toast" role="status">
+            <button
+              type="button"
+              className="toast-close"
+              aria-label="Dismiss notification"
+              onClick={() => setPublishingNotice(null)}
+            >
+              ×
+            </button>
+            <span>{publishingNotice.message}</span>
+            <a
+              href={`https://www.youtube.com/watch?v=${publishingNotice.videoId}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open on YouTube
+            </a>
+          </div>
         )}
 
         {sessionId && !transcribing && sourceVideoUrl && (
@@ -615,27 +662,25 @@ export const Authenticated: React.FC = () => {
               }
               regenerating={regeneratingField === "mainVideo.tags"}
             />
-            {contentSettings.addToSuitablePlaylist && (
-              <div className="playlist-control">
-                <label htmlFor="playlist-select">Playlist</label>
-                <select
-                  id="playlist-select"
-                  value={selectedPlaylistId}
-                  onChange={(event) => setSelectedPlaylistId(event.target.value)}
-                  onFocus={() => {
-                    if (!playlists.length) void loadPlaylists();
-                  }}
-                >
-                  <option value="">No playlist</option>
-                  {playlists.map((playlist) => (
-                    <option key={playlist.id} value={playlist.id}>
-                      {playlist.title}
-                      {playlist.id === recommendedPlaylistId ? " (Recommended)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div className="playlist-control">
+              <label htmlFor="playlist-select">Playlist</label>
+              <select
+                id="playlist-select"
+                value={selectedPlaylistId}
+                onChange={(event) => setSelectedPlaylistId(event.target.value)}
+                onFocus={() => {
+                  if (!playlists.length) void loadPlaylists();
+                }}
+              >
+                <option value="">No playlist</option>
+                {playlists.map((playlist) => (
+                  <option key={playlist.id} value={playlist.id}>
+                    {playlist.title}
+                    {playlist.id === recommendedPlaylistId ? " (Recommended)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
             <ThumbnailUpload
               sessionId={sessionId}
               upload={uploadThumbnail}
@@ -653,8 +698,8 @@ export const Authenticated: React.FC = () => {
               </>
             )}
 
-            {showShortVideo && contentSettings.enableShort && generatedContent.short && (
-              <div className="short-video-section">
+            {showShortVideo && generatedContent.short && (
+              <div className={`short-video-section${showMainVideo ? "" : " without-main-video"}`}>
                 <h2>Short Video</h2>
                 {shortPreviewLoading && (
                   <div className="short-preview-status" role="status">
@@ -851,7 +896,10 @@ export const Authenticated: React.FC = () => {
                       <label className="setting-row" key="enableShort">
                         <span className="setting-copy">
                           <strong>Enable Short Video</strong>
-                          <small>Generate a short-form version alongside the main video.</small>
+                          <small>
+                            Generate a vertical short-form version from the selected part of the
+                            uploaded video, in addition to the Main Video.
+                          </small>
                         </span>
                         <input
                           className="toggle-input"
@@ -861,7 +909,6 @@ export const Authenticated: React.FC = () => {
                             setContentSettings((current) => ({
                               ...current,
                               enableShort: event.target.checked,
-                              ...(event.target.checked ? {} : { cropShortVideo: false }),
                             }))
                           }
                         />
@@ -871,7 +918,8 @@ export const Authenticated: React.FC = () => {
                         <span className="setting-copy">
                           <strong>Crop Sides for Short Video</strong>
                           <small>
-                            Use the original centered crop instead of the blurred canvas.
+                            Use the original centered crop by cutting away the left and right
+                            sides, instead of preserving the full frame with a blurred canvas.
                           </small>
                         </span>
                         <input
@@ -899,10 +947,10 @@ export const Authenticated: React.FC = () => {
                           <strong>{label}</strong>
                           <small>
                             {key === "createChapters"
-                              ? "Add chapter timestamps to the generated video description."
+                              ? "Analyze the transcript and add timestamped chapter sections to the generated video description for easier navigation."
                               : key === "addToSuitablePlaylist"
-                                ? "Choose and add the video to a relevant YouTube playlist."
-                                : "Generate an optional AI thumbnail for the Main Video."}
+                                ? "Choose a relevant playlist for the Main Video and add the published video to it automatically when possible."
+                                : "Generate an optional AI thumbnail for the Main Video based on the content and title."}
                           </small>
                         </span>
                         <input
@@ -922,7 +970,10 @@ export const Authenticated: React.FC = () => {
                     <label className="setting-row" htmlFor="llm-model">
                       <span className="setting-copy">
                         <strong>LLM Model</strong>
-                        <small>Select the language model used to generate your content.</small>
+                        <small>
+                          Select the language model used to generate your titles, descriptions,
+                          tags, chapters, and Short Video metadata.
+                        </small>
                       </span>
                       <select
                         id="llm-model"
@@ -942,13 +993,15 @@ export const Authenticated: React.FC = () => {
                       <span className="setting-copy">
                         <strong>Automate Entire Process</strong>
                         <small>
-                          Automatically continue through generation and publishing when possible.
+                          Automatically generate the content and publish the Main Video and Short
+                          Video to your connected YouTube channel when possible.
                         </small>
                       </span>
                       <input
                         className="toggle-input"
                         type="checkbox"
                         checked={contentSettings.automateEntireProcess}
+                        disabled={!isConnected}
                         onChange={(event) =>
                           setContentSettings((current) => ({
                             ...current,

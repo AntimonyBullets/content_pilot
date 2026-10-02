@@ -9,13 +9,18 @@ import {
   disconnectYouTube as apiDisconnectYouTube,
 } from "../api/client";
 
+export interface YouTubeNotice {
+  message: string;
+  isError: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
   youtubeStatus: YouTubeStatusResponse | null;
   youtubeLoading: boolean;
-  youtubeNotice: string | null;
+  youtubeNotice: YouTubeNotice | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [youtubeStatus, setYoutubeStatus] = useState<YouTubeStatusResponse | null>(null);
   const [youtubeLoading, setYoutubeLoading] = useState<boolean>(false);
-  const [youtubeNotice, setYoutubeNotice] = useState<string | null>(null);
+  const [youtubeNotice, setYoutubeNotice] = useState<YouTubeNotice | null>(null);
 
   const fetchYouTubeStatus = useCallback(async () => {
     setYoutubeLoading(true);
@@ -78,11 +83,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const reason = urlParams.get("reason");
 
     if (youtubeAuth === "success") {
-      setYoutubeNotice("YouTube connected successfully!");
+      setYoutubeNotice({ message: "YouTube connected successfully!", isError: false });
       // Clean up search query param from URL without reloading page
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (youtubeAuth === "error") {
-      setYoutubeNotice(`YouTube connection failed: ${reason || "Access denied or unknown error"}`);
+      setYoutubeNotice({
+        message: `YouTube connection failed: ${reason || "Access denied or unknown error"}`,
+        isError: true,
+      });
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [checkSession]);
@@ -132,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await apiDisconnectYouTube();
       setYoutubeStatus({ connected: false, channel: null });
-      setYoutubeNotice("YouTube disconnected successfully.");
+      setYoutubeNotice({ message: "YouTube disconnected successfully.", isError: false });
     } catch (error: any) {
       const msg = error.response?.data?.message || "Failed to disconnect YouTube.";
       setError(msg);

@@ -323,6 +323,12 @@ body {
   border-top: 1px solid #444444;
 }
 
+.short-video-section.without-main-video {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .thumbnail-upload {
   display: flex;
   flex-direction: column;
@@ -386,9 +392,88 @@ body {
   margin: 24px 0 0;
 }
 
-.homepage-message {
-  width: min(100%, 900px);
-  margin: 16px auto;
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+  display: flex;
+  max-width: min(380px, calc(100vw - 48px));
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 42px 14px 16px;
+  border: 1px solid #555555;
+  background: #1b1b1b;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast-ephemeral {
+  animation: toast-fade 4s ease-in-out forwards;
+}
+
+.toast-success {
+  color: #d7efd7;
+  border-color: #557355;
+}
+
+.toast-error {
+  background: #2d1515;
+  color: #ff8888;
+  border-color: #662222;
+}
+
+.toast a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.toast-close {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  width: auto;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #aaaaaa;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.toast-close:hover {
+  color: #ffffff;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  12%,
+  78% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
 
 .homepage-footer {
@@ -427,7 +512,7 @@ body {
 .settings-modal {
   position: relative;
   display: flex;
-  width: min(100%, 760px);
+  width: min(100%, 1000px);
   height: 560px;
   border: 1px solid #444444;
   background: #1e1e1e;
@@ -530,7 +615,7 @@ body {
 
 .settings-list,
 .account-settings {
-  max-width: 520px;
+  max-width: 620px;
 }
 
 .setting-row,
@@ -559,7 +644,7 @@ body {
 }
 
 .setting-copy small {
-  max-width: 430px;
+  max-width: 520px;
   color: #888888;
   font-size: 0.78rem;
   line-height: 1.35;
@@ -705,32 +790,7 @@ body {
 }
 
 .youtube-toast {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
   z-index: 30;
-  max-width: min(360px, calc(100vw - 48px));
-  padding: 12px 16px;
-  border: 1px solid #226633;
-  background: #152d1b;
-  color: #88ff99;
-  font-size: 0.875rem;
-  cursor: pointer;
-  animation: toast-fade 4s ease-in-out forwards;
-}
-
-@keyframes toast-fade {
-  0%,
-  100% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  12%,
-  82% {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .url-modal-backdrop {

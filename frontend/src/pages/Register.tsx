@@ -43,7 +43,7 @@ export const Register: React.FC = () => {
     <div className="card">
       <h1>ContentPilot</h1>
 
-      {displayError && <div className="alert-error">{displayError}</div>}
+      {displayError && <div className="toast toast-error">{displayError}</div>}
 
       <form onSubmit={handleSubmit}>
         <div className="form-group">
