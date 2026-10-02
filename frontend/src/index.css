@@ -15,6 +15,32 @@ body {
   padding: 20px;
 }
 
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 #121212;
+}
+
+html::-webkit-scrollbar,
+.homepage::-webkit-scrollbar {
+  width: 8px;
+}
+
+html::-webkit-scrollbar-track,
+.homepage::-webkit-scrollbar-track {
+  background: #121212;
+}
+
+html::-webkit-scrollbar-thumb,
+.homepage::-webkit-scrollbar-thumb {
+  border: 2px solid #121212;
+  background: #555555;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+.homepage::-webkit-scrollbar-thumb:hover {
+  background: #707070;
+}
+
 #root {
   width: 100%;
   max-width: 420px;
@@ -32,6 +58,8 @@ body {
   flex-direction: column;
   align-items: center;
   background-color: #121212;
+  scrollbar-width: thin;
+  scrollbar-color: #555555 #121212;
 }
 
 .settings-button {
