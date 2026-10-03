@@ -279,6 +279,14 @@ export const generateContent = async (
     playlist: YouTubePlaylist | null;
     thumbnail?: GeneratedThumbnail | null;
     thumbnailError?: string | null;
+    automationSkipped?: boolean;
+    automationSkipReason?: string;
+    automation?: {
+      attempted: boolean;
+      mainVideo: { youtubeVideoId: string } | null;
+      short: { youtubeVideoId: string } | null;
+      errors: Array<{ step: string; message: string }>;
+    };
   }>("/api/content/generate", {
       sessionId,
       transcript,

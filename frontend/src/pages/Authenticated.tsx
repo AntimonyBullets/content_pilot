@@ -32,6 +32,14 @@ type PublishingNotice = {
   videoId: string;
 };
 
+type AutomationNotice = {
+  mainVideoId: string | null;
+  shortVideoId: string | null;
+  shortEnabled: boolean;
+  generationSucceeded: boolean;
+  errors: string[];
+};
+
 export const Authenticated: React.FC = () => {
   const {
     user,
@@ -66,6 +74,7 @@ export const Authenticated: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [publishingNotice, setPublishingNotice] = useState<PublishingNotice | null>(null);
+  const [automationNotice, setAutomationNotice] = useState<AutomationNotice | null>(null);
   const [regenerationTarget, setRegenerationTarget] = useState<RegenerationTarget | null>(null);
   const [regenerationMessage, setRegenerationMessage] = useState("");
   const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
@@ -288,12 +297,16 @@ export const Authenticated: React.FC = () => {
 
     setError(null);
     setMessage(null);
+    setAutomationNotice(null);
     setGenerating(true);
     try {
       const response = await generateContent(sessionId, transcriptRef.current, contentSettings);
       setGeneratedContent(response.content);
-      setShowMainVideo(true);
-      setShowShortVideo(Boolean(contentSettings.enableShort && response.content.short));
+      setShowMainVideo(!contentSettings.automateEntireProcess);
+      setShowShortVideo(
+        !contentSettings.automateEntireProcess &&
+          Boolean(contentSettings.enableShort && response.content.short)
+      );
       if (response.thumbnail?.type === "generated") {
         try {
           const thumbnailBlob = await getGeneratedThumbnail(sessionId);
@@ -311,13 +324,40 @@ export const Authenticated: React.FC = () => {
       const recommendedId = response.playlist?.id || null;
       setRecommendedPlaylistId(recommendedId);
       setSelectedPlaylistId(recommendedId || "");
-      setMessage(
-        response.thumbnailError
-          ? `Content generated successfully. ${response.thumbnailError}`
-          : "Content generated successfully."
-      );
+      if (contentSettings.automateEntireProcess) {
+        setAutomationNotice({
+          mainVideoId: response.automation?.mainVideo?.youtubeVideoId || null,
+          shortVideoId: response.automation?.short?.youtubeVideoId || null,
+          shortEnabled: contentSettings.enableShort,
+          generationSucceeded: true,
+          errors: [
+            ...(response.automation?.errors || []).map((item) => item.message),
+            ...(response.automationSkipReason ? [response.automationSkipReason] : []),
+          ],
+        });
+      } else {
+        setMessage(
+          response.thumbnailError
+            ? `Content generated successfully. ${response.thumbnailError}`
+            : "Content generated successfully."
+        );
+      }
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "Unable to generate content. Please try again."));
+      const generationError = getErrorMessage(
+        requestError,
+        "Unable to generate content. Please try again."
+      );
+      if (contentSettings.automateEntireProcess) {
+        setAutomationNotice({
+          mainVideoId: null,
+          shortVideoId: null,
+          shortEnabled: contentSettings.enableShort,
+          generationSucceeded: false,
+          errors: [generationError],
+        });
+      } else {
+        setError(generationError);
+      }
     } finally {
       setGenerating(false);
     }
@@ -573,6 +613,65 @@ export const Authenticated: React.FC = () => {
             </a>
           </div>
         )}
+        {automationNotice && (
+          <div
+            className={`toast publishing-toast ${
+              automationNotice.generationSucceeded &&
+              automationNotice.mainVideoId &&
+              (!automationNotice.shortEnabled || automationNotice.shortVideoId)
+                ? "toast-success"
+                : "toast-error"
+            }`}
+            role="status"
+          >
+            <button
+              type="button"
+              className="toast-close"
+              aria-label="Dismiss notification"
+              onClick={() => setAutomationNotice(null)}
+            >
+              ×
+            </button>
+            <strong>
+              {automationNotice.generationSucceeded
+                ? "Content Generated Successfully"
+                : "Content Generation Failed"}
+            </strong>
+            <span>
+              Main Video:{" "}
+              {automationNotice.mainVideoId ? (
+                <a
+                  href={`https://www.youtube.com/watch?v=${automationNotice.mainVideoId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Published on YouTube
+                </a>
+              ) : (
+                "Not published"
+              )}
+            </span>
+            {automationNotice.shortEnabled && (
+              <span>
+                Short Video:{" "}
+                {automationNotice.shortVideoId ? (
+                  <a
+                    href={`https://www.youtube.com/watch?v=${automationNotice.shortVideoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Published on YouTube
+                  </a>
+                ) : (
+                  "Not published"
+                )}
+              </span>
+            )}
+            {automationNotice.errors.map((noticeError, index) => (
+              <small key={`${noticeError}-${index}`}>{noticeError}</small>
+            ))}
+          </div>
+        )}
 
         {sessionId && !transcribing && sourceVideoUrl && (
           <section className="video-preview-section" aria-label="Source video preview">
@@ -592,7 +691,7 @@ export const Authenticated: React.FC = () => {
           </button>
         )}
 
-        {generatedContent && !transcribing && (
+        {generatedContent && !transcribing && !contentSettings.automateEntireProcess && (
           <section className="generated-content">
             {showMainVideo && (
               <>

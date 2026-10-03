@@ -533,6 +533,7 @@ html::-webkit-scrollbar-thumb:hover,
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   padding: 24px;
   background: rgba(0, 0, 0, 0.72);
 }
@@ -542,6 +543,7 @@ html::-webkit-scrollbar-thumb:hover,
   display: flex;
   width: min(100%, 1000px);
   height: 560px;
+  max-height: calc(100vh - 48px);
   border: 1px solid #444444;
   background: #1e1e1e;
   overflow: hidden;
@@ -611,8 +613,10 @@ html::-webkit-scrollbar-thumb:hover,
 
 .settings-panel {
   flex: 1;
+  min-height: 0;
   padding: 72px 58px 40px 44px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #555555 #1e1e1e;
 }
